@@ -3,7 +3,7 @@ import requests
 import os
 from google import genai
 from dotenv import load_dotenv
-from datetime import datetime, timedelta
+from datetime import datetime
 
 # 1. Load Keys
 load_dotenv()
@@ -12,16 +12,30 @@ client = genai.Client(api_key=api_key)
 
 # --- HELPER: WMO CODE TO EMOJI ---
 def get_weather_emoji(code):
-    # WMO Weather interpretation codes (http://www.od.org/wmo-codes)
-    if code == 0: return "☀️" # Clear sky
-    if code in [1, 2, 3]: return "⛅" # Partly cloudy
-    if code in [45, 48]: return "🌫️" # Fog
-    if code in [51, 53, 55, 61, 63, 65, 80, 81, 82]: return "🌧️" # Rain
-    if code in [71, 73, 75, 77, 85, 86]: return "❄️" # Snow
-    if code in [95, 96, 99]: return "⛈️" # Thunderstorm
-    return "☁️" # Default Cloudy
+    if code == 0: return "☀️"
+    if code in [1, 2, 3]: return "⛅"
+    if code in [45, 48]: return "🌫️"
+    if code in [51, 53, 55, 61, 63, 65, 80, 81, 82]: return "🌧️"
+    if code in [71, 73, 75, 77, 85, 86]: return "❄️"
+    if code in [95, 96, 99]: return "⛈️"
+    return "☁️"
 
-# --- CAPACITY ENGINE (V4.0) ---
+# --- NEW: VOLUME TRANSLATOR ---
+def translate_liters_to_goods(liters):
+    if liters <= 0:
+        return "No extra space reserved."
+    elif liters < 10:
+        return "🛍️ Fits: Small souvenirs, trinkets, and duty-free snacks."
+    elif liters < 25:
+        return "🛍️ Fits: 1 pair of shoes, 2-3 t-shirts, and small gift boxes."
+    elif liters < 45:
+        return "🛍️ Fits: 2 pairs of shoes, jeans, light jacket, and many souvenirs."
+    elif liters < 70:
+        return "🛍️ Fits: Heavy Winter Coat, boots, 3 pairs of jeans, and boxed sweets."
+    else:
+        return "🛍️ Fits: A completely new wardrobe (Suitcase within a suitcase!)."
+
+# --- CAPACITY ENGINE ---
 def calculate_capacity_metrics(luggage_counts, duration, shopping_intent, formal_count, walking_level):
     CAPACITY_MAP = { "backpack": 20, "carry_on": 40, "checked": 100 }
     
@@ -52,7 +66,7 @@ def calculate_capacity_metrics(luggage_counts, duration, shopping_intent, formal
         "is_overpacked": usage_pct > 1.0
     }
 
-# 2. Weather Tool (Updated to handle 16-day forecast windows)
+# 2. Weather Tool
 def get_weather_data(city_name):
     try:
         geo_url = f"https://geocoding-api.open-meteo.com/v1/search?name={city_name}&count=1&language=en&format=json"
@@ -62,7 +76,6 @@ def get_weather_data(city_name):
         lat = geo_response["results"][0]["latitude"]
         long = geo_response["results"][0]["longitude"]
 
-        # Fetching 16 days to cover most trips
         weather_url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={long}&daily=weather_code,temperature_2m_max,temperature_2m_min&current=temperature_2m,weather_code&temperature_unit=fahrenheit&forecast_days=16"
         return requests.get(weather_url).json()
     except: return None
@@ -126,7 +139,7 @@ def generate_smart_packing_list(city, weather_json, profile_data):
     return response.text
 
 # 5. UI Setup
-st.set_page_config(page_title="TravelCast AI v4.2", page_icon="🧳", layout="wide") 
+st.set_page_config(page_title="TravelCast AI v4.3", page_icon="🧳", layout="wide") 
 st.title("🧳 Luggage Optimizer (TravelCast AI)")
 st.caption("Capacity Calculation + AI Styling")
 
@@ -170,7 +183,10 @@ if arrival_date and depart_date:
     m_col1, m_col2, m_col3 = st.columns(3)
     with m_col1: st.metric("Total Capacity", f"{metrics['total_L']} Liters")
     with m_col2: st.metric("Est. Clothing Load", f"{metrics['used_L']} Liters")
-    with m_col3: st.metric("Reserved for Shopping", f"{metrics['reserved_L']} Liters")
+    with m_col3: 
+        st.metric("Reserved for Shopping", f"{metrics['reserved_L']} Liters")
+        # VISUALIZER CALL
+        st.caption(f"_{translate_liters_to_goods(metrics['reserved_L'])}_")
 
     if metrics['is_overpacked']:
         st.error(f"⚠️ OVERPACKED! You are trying to fit {metrics['used_L'] + metrics['reserved_L']}L into a {metrics['total_L']}L container.")
@@ -189,22 +205,16 @@ if st.button("Generate Optimized List", type="primary"):
             weather_data = get_weather_data(city)
             
             if weather_data and "daily" in weather_data:
-                # --- NEW: VISUAL WEATHER STRIP ---
                 st.divider()
                 st.subheader(f"🌤️ Weather Forecast: {city}")
                 
-                # Create a horizontal scrollable container or columns
                 daily_data = weather_data['daily']
                 dates = daily_data['time']
                 codes = daily_data['weather_code']
                 max_temps = daily_data['temperature_2m_max']
                 min_temps = daily_data['temperature_2m_min']
                 
-                # We slice the data to match the user's trip dates if possible
-                # Note: This simple logic assumes the forecast API returned dates matching the trip.
-                # In production, you'd match the specific date strings.
-                
-                weather_cols = st.columns(min(7, len(dates))) # Show max 7 days to fit screen
+                weather_cols = st.columns(min(7, len(dates))) 
                 
                 for i, col in enumerate(weather_cols):
                     if i < len(dates):
@@ -212,13 +222,11 @@ if st.button("Generate Optimized List", type="primary"):
                         emoji = get_weather_emoji(codes[i])
                         high = round(max_temps[i])
                         low = round(min_temps[i])
-                        
                         with col:
                             st.markdown(f"**{day_date}**")
                             st.markdown(f"# {emoji}")
                             st.caption(f"H: {high}° / L: {low}°")
                 
-                # --- AI GENERATION ---
                 _, shop_note = get_trip_context(arrival_date, depart_date, shopping, luggage_counts)
                 
                 payload = {
