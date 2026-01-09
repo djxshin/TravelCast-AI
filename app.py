@@ -20,20 +20,22 @@ def get_weather_emoji(code):
     if code in [95, 96, 99]: return "⛈️"
     return "☁️"
 
-# --- NEW: VOLUME TRANSLATOR ---
+# --- HELPER: VOLUME TRANSLATOR ---
 def translate_liters_to_goods(liters):
     if liters <= 0:
-        return "No extra space reserved."
+        return "No extra space."
     elif liters < 10:
-        return "🛍️ Fits: Small souvenirs, trinkets, and duty-free snacks."
+        return "🛍️ Fits: Small souvenirs, duty-free snacks."
     elif liters < 25:
-        return "🛍️ Fits: 1 pair of shoes, 2-3 t-shirts, and small gift boxes."
+        return "🛍️ Fits: 1 pair of shoes, 2-3 t-shirts, gifts."
     elif liters < 45:
-        return "🛍️ Fits: 2 pairs of shoes, jeans, light jacket, and many souvenirs."
+        return "🛍️ Fits: 2 pairs of shoes, jeans, light jacket."
     elif liters < 70:
-        return "🛍️ Fits: Heavy Winter Coat, boots, 3 pairs of jeans, and boxed sweets."
+        return "🛍️ Fits: Heavy Winter Coat, boots, 3 pairs of jeans."
+    elif liters < 100:
+        return "🛍️ Fits: 2 checked bags worth! A whole new wardrobe + gifts."
     else:
-        return "🛍️ Fits: A completely new wardrobe (Suitcase within a suitcase!)."
+        return "🛍️ Fits: Massive Haul! Multiple coats, appliances, shoes for the whole family."
 
 # --- CAPACITY ENGINE ---
 def calculate_capacity_metrics(luggage_counts, duration, shopping_intent, formal_count, walking_level):
@@ -139,7 +141,7 @@ def generate_smart_packing_list(city, weather_json, profile_data):
     return response.text
 
 # 5. UI Setup
-st.set_page_config(page_title="TravelCast AI v4.3", page_icon="🧳", layout="wide") 
+st.set_page_config(page_title="TravelCast AI v5.0", page_icon="🧳", layout="wide") 
 st.title("🧳 Luggage Optimizer (TravelCast AI)")
 st.caption("Capacity Calculation + AI Styling")
 
@@ -166,7 +168,7 @@ with st.container():
         formal_count = st.number_input("Count", 1, 10, 1) if is_formal else 0
         walking = st.select_slider("Walking", ["Low", "Medium", "High"])
 
-# --- REAL-TIME CALCULATOR ---
+# --- REAL-TIME CALCULATOR (THE NEW DASHBOARD UI) ---
 luggage_counts = {"backpack": backpacks, "carry_on": carry_ons, "checked": checked}
 metrics = None
 
@@ -175,23 +177,55 @@ if arrival_date and depart_date:
     metrics = calculate_capacity_metrics(luggage_counts, dur, shopping, formal_count, walking)
     
     st.divider()
-    st.subheader("📊 Luggage Capacity Analysis")
     
-    bar_color = "red" if metrics['is_overpacked'] else "green"
-    st.progress(metrics['usage_pct'])
-    
-    m_col1, m_col2, m_col3 = st.columns(3)
-    with m_col1: st.metric("Total Capacity", f"{metrics['total_L']} Liters")
-    with m_col2: st.metric("Est. Clothing Load", f"{metrics['used_L']} Liters")
-    with m_col3: 
-        st.metric("Reserved for Shopping", f"{metrics['reserved_L']} Liters")
-        # VISUALIZER CALL
-        st.caption(f"_{translate_liters_to_goods(metrics['reserved_L'])}_")
-
+    # --- 1. THE HEADER ---
     if metrics['is_overpacked']:
-        st.error(f"⚠️ OVERPACKED! You are trying to fit {metrics['used_L'] + metrics['reserved_L']}L into a {metrics['total_L']}L container.")
+        st.error(f"⚠️ **OVERPACKED!** You need {metrics['used_L'] + metrics['reserved_L']}L but only have {metrics['total_L']}L.")
     else:
-        st.success(f"✅ Safe! You have {round(metrics['total_L'] - metrics['used_L'] - metrics['reserved_L'], 1)}L of free space.")
+        # Calculate percentages
+        pct_used = (metrics['used_L'] / metrics['total_L']) * 100
+        pct_reserved = (metrics['reserved_L'] / metrics['total_L']) * 100
+        pct_free = 100 - pct_used - pct_reserved
+        
+        # Calculate realities
+        physical_free = round(metrics['total_L'] - metrics['used_L'], 1)
+        total_potential = round(physical_free + metrics['reserved_L'], 1)
+        
+        st.markdown(f"### ✅ Ready to Pack! ({int(pct_free)}% Empty)")
+
+        # --- 2. THE CLEAN BAR (Gray | Purple | Green) ---
+        st.markdown(f"""
+        <div style="display: flex; width: 100%; height: 24px; border-radius: 8px; overflow: hidden; margin-bottom: 12px; border: 1px solid #ddd;">
+            <div style="width: {pct_used}%; background-color: #7f8c8d;"></div>
+            <div style="width: {pct_reserved}%; background-color: #9b59b6;"></div>
+            <div style="width: {pct_free}%; background-color: #2ecc71;"></div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # --- 3. THE LEGEND ---
+        st.markdown(f"""
+        <div style="display: flex; justify-content: space-between; font-family: sans-serif; font-size: 14px; color: #444; margin-bottom: 25px;">
+            <div style="display: flex; align-items: center;">
+                <span style="color: #7f8c8d; font-size: 20px; line-height: 0;">●</span>&nbsp;<span><b>Clothes</b> ({int(pct_used)}%)</span>
+            </div>
+            <div style="display: flex; align-items: center;">
+                <span style="color: #9b59b6; font-size: 20px; line-height: 0;">●</span>&nbsp;<span><b>Shopping</b> ({int(pct_reserved)}%)</span>
+            </div>
+            <div style="display: flex; align-items: center;">
+                <span style="color: #2ecc71; font-size: 20px; line-height: 0;">●</span>&nbsp;<span><b>Free Space</b> ({int(pct_free)}%)</span>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # --- 4. THE SUMMARY CARD (Unified) ---
+        with st.container(border=True):
+            st.markdown("**🛍️ Total Shopping Potential**")
+            st.markdown(f"<h1 style='margin: 0; font-size: 32px;'>{total_potential} Liters</h1>", unsafe_allow_html=True)
+            st.caption(f"_{translate_liters_to_goods(total_potential)}_")
+            
+            # Contextual Warning
+            if total_potential > 60:
+                 st.warning("⚠️ **Checked Bag Warning:** Filling this entire volume will likely exceed the 50lb (23kg) weight limit. Please weigh your bag before heading to the airport.")
 
 # --- GENERATE BUTTON ---
 if st.button("Generate Optimized List", type="primary"):
