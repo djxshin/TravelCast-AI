@@ -10,187 +10,202 @@ load_dotenv()
 api_key = os.getenv("GOOGLE_API_KEY")
 client = genai.Client(api_key=api_key)
 
+# --- NEW: CAPACITY ENGINE ---
+def calculate_capacity_metrics(luggage_counts, duration, shopping_intent, formal_count, walking_level):
+    # A. Define Capacities (in Liters)
+    CAPACITY_MAP = {
+        "backpack": 20,
+        "carry_on": 40,
+        "checked": 100
+    }
+    
+    total_capacity = (luggage_counts['backpack'] * CAPACITY_MAP['backpack']) + \
+                     (luggage_counts['carry_on'] * CAPACITY_MAP['carry_on']) + \
+                     (luggage_counts['checked'] * CAPACITY_MAP['checked'])
+    
+    # B. Define Consumption (in Liters)
+    # Base load per day (Clothes + Toiletries)
+    daily_load = 3.5 
+    
+    # Fixed loads
+    tech_kit = 2.0 
+    shoes_vol = 3.0 if walking_level == "High" else 1.5
+    formal_vol = 4.0 * formal_count # Suits are bulky
+    
+    estimated_load = (duration * daily_load) + tech_kit + shoes_vol + formal_vol
+    
+    # C. Shopping Reserve
+    SHOPPING_RESERVE = {
+        "None": 0.0,
+        "Light": 0.10,   # Reserve 10%
+        "Medium": 0.20,  # Reserve 20%
+        "Heavy": 0.30    # Reserve 30%
+    }
+    reserve_pct = SHOPPING_RESERVE[shopping_intent]
+    reserved_space = total_capacity * reserve_pct
+    
+    # D. Final Metrics
+    final_used = estimated_load
+    remaining_space = total_capacity - final_used - reserved_space
+    
+    usage_pct = (final_used + reserved_space) / total_capacity if total_capacity > 0 else 1.1
+    
+    return {
+        "total_L": total_capacity,
+        "used_L": round(final_used, 1),
+        "reserved_L": round(reserved_space, 1),
+        "usage_pct": min(usage_pct, 1.0),
+        "is_overpacked": usage_pct > 1.0
+    }
+
 # 2. Weather Tool
 def get_weather_data(city_name):
     try:
-        # Geocoding
         geo_url = f"https://geocoding-api.open-meteo.com/v1/search?name={city_name}&count=1&language=en&format=json"
         geo_response = requests.get(geo_url).json()
-        if "results" not in geo_response:
-            return None
+        if "results" not in geo_response: return None
         
-        latitude = geo_response["results"][0]["latitude"]
-        longitude = geo_response["results"][0]["longitude"]
+        lat = geo_response["results"][0]["latitude"]
+        long = geo_response["results"][0]["longitude"]
 
-        # Fetch Daily Highs/Lows
-        weather_url = f"https://api.open-meteo.com/v1/forecast?latitude={latitude}&longitude={longitude}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum&current=temperature_2m,weather_code&temperature_unit=fahrenheit"
-        weather_response = requests.get(weather_url).json()
-        return weather_response
+        weather_url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={long}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum&current=temperature_2m,weather_code&temperature_unit=fahrenheit"
+        return requests.get(weather_url).json()
+    except: return None
 
-    except Exception as e:
-        return {"error": str(e)}
-
-# 3. The Logic Helper
+# 3. Logic Helper
 def get_trip_context(arrival, depart, shopping_intent, luggage_counts):
-    # Duration
     delta = depart - arrival
     duration = max(1, delta.days + 1)
     
-    # Shopping Logic
     shopping_note = "Standard packing."
-    
     if shopping_intent == "Heavy":
         if luggage_counts['checked'] > 0:
-             shopping_note = "User plans HEAVY shopping but has checked bags. Suggest packing the checked bag only 50% full."
+             shopping_note = "User plans HEAVY shopping. Suggest packing checked bag only 50% full."
         elif luggage_counts['carry_on'] > 0:
-            shopping_note = "CRITICAL: Heavy shopping with only Carry-on. Reduce clothing by 30% and maximize 'Wear on Plane' items."
+            shopping_note = "CRITICAL: Heavy shopping with Carry-on. Reduce clothing by 30%."
         else:
-            shopping_note = "CRITICAL: Heavy shopping with Backpack only. Suggest minimalist capsule wardrobe."
+            shopping_note = "CRITICAL: Heavy shopping with Backpack. Minimalist capsule wardrobe only."
 
     return duration, shopping_note
 
-# 4. The AI Generator
+# 4. AI Generator
 def generate_smart_packing_list(city, weather_json, profile_data):
-    
-    # Dynamic Formal Instruction
     formal_instruction = "No formal events."
     if profile_data['formal_count'] > 0:
-        formal_instruction = f"IMPORTANT: User has {profile_data['formal_count']} specific formal events (e.g. dinners/galas). You MUST include exactly {profile_data['formal_count']} formal outfit sets (Suit/Dress/Shoes) in the list."
+        formal_instruction = f"IMPORTANT: User has {profile_data['formal_count']} formal events. Include exactly {profile_data['formal_count']} formal outfits."
 
     prompt = f"""
-    Act as an elite Travel Stylist. Generate a cleaner, highly organized packing list.
-
-    DESTINATION: {city}
-    WEATHER DATA (Daily Max/Min): {weather_json.get('daily', 'N/A')}
-    CURRENT CONDITIONS: {weather_json.get('current', 'N/A')}
+    Act as an elite Travel Stylist. 
     
-    TRIP PROFILE:
-    - Traveler: {profile_data['gender']}, Age {profile_data['age']}
-    - Duration: {profile_data['duration']} Days
-    - Purpose: {', '.join(profile_data['purpose'])}
-    - Activity Level: {profile_data['walking']} walking
-    - LUGGAGE: {profile_data['luggage_counts']}
+    DESTINATION: {city}
+    WEATHER: {weather_json.get('daily', 'N/A')}
+    TRIP PROFILE: {profile_data}
     
     CONSTRAINTS: 
     1. {profile_data['shopping_note']}
-    2. SPACE SAVER RULE: Identify the bulkies items (Heavy Jackets, Boots, Hoodies). You MUST tell the user to WEAR these on the plane.
+    2. SPACE SAVER: Identify bulky items (Coats, Boots) to WEAR ON PLANE.
     3. {formal_instruction}
     
     OUTPUT FORMAT (Strict Markdown):
     
-    ### 🌤️ Weather & Vibe
-    [General 1-sentence summary of the city's current vibe]
-    * **Morning:** [Temp/Feel] - [Specific advice: e.g. "Crisp cold, need thermal layers"]
-    * **Afternoon:** [Temp/Feel] - [Specific advice: e.g. "Warms up, shed the heavy coat"]
-    * **Evening:** [Temp/Feel] - [Specific advice: e.g. "Drops freezing, add scarf/gloves"]
+    ### 🌤️ Trip Forecast
+    [Brief specific weather advice for Morning/Afternoon/Evening]
 
-    ### ✈️ Wear On Plane (Space Saver Mode)
-    * List the bulkiest items here to save bag space.
+    ### ✈️ Wear On Plane (Space Saver)
+    * List heavy items here.
     
     ### 🎒 The Packing List
-    | Category | Item | Qty | Fabric/Style Note |
+    | Category | Item | Qty | Notes |
     | :--- | :--- | :--- | :--- |
     | Tops | ... | ... | ... |
     | Bottoms | ... | ... | ... |
-    | Formal Wear | ... | ... | ... |
     | Shoes | ... | ... | ... |
-    | Essentials | ... | ... | ... |
-
-    ### 💡 Smart Tips
-    * [Tip about shopping/luggage management]
-    * [Tip about local style/walking]
+    
+    ### 💡 Pro Tip
+    * [One specific tip based on destination]
     """
     
-    response = client.models.generate_content(
-        model="gemini-flash-latest", 
-        contents=prompt
-    )
+    response = client.models.generate_content(model="gemini-flash-latest", contents=prompt)
     return response.text
 
-# 5. The Updated UI
-st.set_page_config(page_title="TravelCast AI v3.0", page_icon="✈️", layout="wide") 
-st.title("✈️ TravelCast AI v3.0")
-st.markdown("### Smart Packing Assistant")
+# 5. UI Setup
+st.set_page_config(page_title="TravelCast AI v4.0", page_icon="🧳", layout="wide") 
+st.title("🧳 Luggage Optimizer (TravelCast AI)")
+st.caption("Capacity Calculation + AI Styling")
 
 # --- INPUT SECTION ---
 with st.container():
     col1, col2 = st.columns(2)
-    
     with col1:
-        st.subheader("1. Who & Where")
-        city = st.text_input("Destination City", placeholder="e.g. New York, London")
-        col_demo_1, col_demo_2 = st.columns(2)
-        with col_demo_1:
-            gender = st.selectbox("Gender", ["Male", "Female", "Non-Binary"])
-        with col_demo_2:
-            age_group = st.selectbox("Age Group", ["18-30", "30-45", "45-70"])
-            
-        arrival_date = st.date_input("Arrival Date")
-        depart_date = st.date_input("Departure Date")
-
+        st.subheader("1. Trip Details")
+        city = st.text_input("Destination", placeholder="e.g. Tokyo")
+        arrival_date = st.date_input("Arrival")
+        depart_date = st.date_input("Departure")
+        purpose = st.multiselect("Purpose", ["Business", "Vacation", "Adventure", "Romantic"])
+        
     with col2:
-        st.subheader("2. Trip Details")
-        purpose = st.multiselect("Trip Purpose (Select all that apply)", 
-                                 ["Business", "Vacation", "Adventure/Hiking", "Romantic", "Family Visit"])
+        st.subheader("2. Luggage & Load")
+        c_lug1, c_lug2, c_lug3 = st.columns(3)
+        with c_lug1: backpacks = st.number_input("Backpacks (20L)", 0, 3, 1)
+        with c_lug2: carry_ons = st.number_input("Carry-ons (40L)", 0, 3, 0)
+        with c_lug3: checked = st.number_input("Checked (100L)", 0, 3, 0)
         
-        walking_level = st.select_slider("Daily Walking", options=["Low", "Medium", "High"])
+        shopping = st.select_slider("Shopping Intent", ["None", "Light", "Medium", "Heavy"])
         
-        # --- NEW FORMAL EVENT LOGIC ---
-        is_formal = st.checkbox("Formal Events (Dinners/Galas)?")
-        formal_count = 0
-        if is_formal:
-            formal_count = st.number_input("How many Formal Events?", min_value=1, max_value=10, value=1)
-        
-        st.divider()
-        
-        st.subheader("3. Luggage & Shopping")
-        col_lug_1, col_lug_2, col_lug_3 = st.columns(3)
-        with col_lug_1:
-            backpacks = st.number_input("Backpacks", 0, 3, 1)
-        with col_lug_2:
-            carry_ons = st.number_input("Carry-ons", 0, 3, 0)
-        with col_lug_3:
-            checked_bags = st.number_input("Checked Bags", 0, 3, 0)
-            
-        shopping_intent = st.select_slider("Shopping Intent", options=["None", "Light", "Medium", "Heavy"])
+        is_formal = st.checkbox("Formal Events?")
+        formal_count = st.number_input("Count", 1, 10, 1) if is_formal else 0
+        walking = st.select_slider("Walking", ["Low", "Medium", "High"])
 
-# --- GENERATION SECTION ---
-if st.button("Generate Smart List", type="primary"):
-    if not city:
-        st.error("Please enter a destination city.")
-    elif arrival_date > depart_date:
-        st.error("Arrival date must be before Departure date.")
-    elif not purpose:
-         st.error("Please select at least one trip purpose.")
+# --- REAL-TIME CALCULATOR ---
+# We calculate this BEFORE the button press to give instant feedback
+luggage_counts = {"backpack": backpacks, "carry_on": carry_ons, "checked": checked}
+if arrival_date and depart_date:
+    dur = max(1, (depart_date - arrival_date).days + 1)
+    
+    # Run the Math
+    metrics = calculate_capacity_metrics(luggage_counts, dur, shopping, formal_count, walking)
+    
+    st.divider()
+    st.subheader("📊 Luggage Capacity Analysis")
+    
+    # Display the Progress Bar
+    bar_color = "red" if metrics['is_overpacked'] else "green"
+    st.progress(metrics['usage_pct'])
+    
+    # Display the Data
+    m_col1, m_col2, m_col3 = st.columns(3)
+    with m_col1:
+        st.metric("Total Capacity", f"{metrics['total_L']} Liters")
+    with m_col2:
+        st.metric("Est. Clothing Load", f"{metrics['used_L']} Liters")
+    with m_col3:
+        st.metric("Reserved for Shopping", f"{metrics['reserved_L']} Liters")
+
+    if metrics['is_overpacked']:
+        st.error(f"⚠️ OVERPACKED! You are trying to fit {metrics['used_L'] + metrics['reserved_L']}L into a {metrics['total_L']}L container. Add a bag or cut the shopping.")
     else:
-        with st.spinner(f"Analyzing weather patterns for {city} & optimizing luggage space..."):
+        st.success(f"✅ Safe! You have {round(metrics['total_L'] - metrics['used_L'] - metrics['reserved_L'], 1)}L of free space remaining.")
+
+# --- GENERATE BUTTON ---
+if st.button("Generate Optimized List", type="primary"):
+    if metrics['is_overpacked']:
+        st.warning("Proceeding, but the AI will have to cut items aggressively to fit.")
+        
+    with st.spinner("Optimizing wardrobe..."):
+        weather_data = get_weather_data(city)
+        if weather_data:
+            _, shop_note = get_trip_context(arrival_date, depart_date, shopping, luggage_counts)
             
-            # 1. Get Data
-            weather_data = get_weather_data(city)
+            payload = {
+                "duration": dur,
+                "purpose": purpose,
+                "formal_count": formal_count,
+                "luggage_counts": luggage_counts,
+                "shopping_note": shop_note,
+                "gender": "User", "age": "Adult", "walking": walking # Simplified for demo
+            }
             
-            if weather_data and "error" not in weather_data:
-                # 2. Process Logic
-                luggage_counts = {"backpack": backpacks, "carry_on": carry_ons, "checked": checked_bags}
-                duration, shopping_note = get_trip_context(arrival_date, depart_date, shopping_intent, luggage_counts)
-                
-                profile_payload = {
-                    "gender": gender,
-                    "age": age_group,
-                    "duration": duration,
-                    "purpose": purpose,
-                    "walking": walking_level,
-                    "formal_count": formal_count, # Sending the specific number
-                    "luggage_counts": luggage_counts,
-                    "shopping_note": shopping_note
-                }
-                
-                # 3. Call AI
-                try:
-                    result = generate_smart_packing_list(city, weather_data, profile_payload)
-                    st.success(f"Packing List Ready for {duration}-Day Trip!")
-                    st.markdown(result)
-                    
-                except Exception as e:
-                    st.error(f"AI Error: {e}")
-            else:
-                st.error("Could not find weather data. Please check the city name.")
+            res = generate_smart_packing_list(city, weather_data, payload)
+            st.markdown(res)
+        else:
+            st.error("City not found.")
