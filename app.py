@@ -3,50 +3,44 @@ import requests
 import os
 from google import genai
 from dotenv import load_dotenv
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # 1. Load Keys
 load_dotenv()
 api_key = os.getenv("GOOGLE_API_KEY")
 client = genai.Client(api_key=api_key)
 
-# --- NEW: CAPACITY ENGINE ---
+# --- HELPER: WMO CODE TO EMOJI ---
+def get_weather_emoji(code):
+    # WMO Weather interpretation codes (http://www.od.org/wmo-codes)
+    if code == 0: return "☀️" # Clear sky
+    if code in [1, 2, 3]: return "⛅" # Partly cloudy
+    if code in [45, 48]: return "🌫️" # Fog
+    if code in [51, 53, 55, 61, 63, 65, 80, 81, 82]: return "🌧️" # Rain
+    if code in [71, 73, 75, 77, 85, 86]: return "❄️" # Snow
+    if code in [95, 96, 99]: return "⛈️" # Thunderstorm
+    return "☁️" # Default Cloudy
+
+# --- CAPACITY ENGINE (V4.0) ---
 def calculate_capacity_metrics(luggage_counts, duration, shopping_intent, formal_count, walking_level):
-    # A. Define Capacities (in Liters)
-    CAPACITY_MAP = {
-        "backpack": 20,
-        "carry_on": 40,
-        "checked": 100
-    }
+    CAPACITY_MAP = { "backpack": 20, "carry_on": 40, "checked": 100 }
     
     total_capacity = (luggage_counts['backpack'] * CAPACITY_MAP['backpack']) + \
                      (luggage_counts['carry_on'] * CAPACITY_MAP['carry_on']) + \
                      (luggage_counts['checked'] * CAPACITY_MAP['checked'])
     
-    # B. Define Consumption (in Liters)
-    # Base load per day (Clothes + Toiletries)
     daily_load = 3.5 
-    
-    # Fixed loads
     tech_kit = 2.0 
     shoes_vol = 3.0 if walking_level == "High" else 1.5
-    formal_vol = 4.0 * formal_count # Suits are bulky
+    formal_vol = 4.0 * formal_count 
     
     estimated_load = (duration * daily_load) + tech_kit + shoes_vol + formal_vol
     
-    # C. Shopping Reserve
-    SHOPPING_RESERVE = {
-        "None": 0.0,
-        "Light": 0.10,   # Reserve 10%
-        "Medium": 0.20,  # Reserve 20%
-        "Heavy": 0.30    # Reserve 30%
-    }
+    SHOPPING_RESERVE = { "None": 0.0, "Light": 0.10, "Medium": 0.20, "Heavy": 0.30 }
     reserve_pct = SHOPPING_RESERVE[shopping_intent]
     reserved_space = total_capacity * reserve_pct
     
-    # D. Final Metrics
     final_used = estimated_load
-    remaining_space = total_capacity - final_used - reserved_space
     
     usage_pct = (final_used + reserved_space) / total_capacity if total_capacity > 0 else 1.1
     
@@ -58,7 +52,7 @@ def calculate_capacity_metrics(luggage_counts, duration, shopping_intent, formal
         "is_overpacked": usage_pct > 1.0
     }
 
-# 2. Weather Tool
+# 2. Weather Tool (Updated to handle 16-day forecast windows)
 def get_weather_data(city_name):
     try:
         geo_url = f"https://geocoding-api.open-meteo.com/v1/search?name={city_name}&count=1&language=en&format=json"
@@ -68,7 +62,8 @@ def get_weather_data(city_name):
         lat = geo_response["results"][0]["latitude"]
         long = geo_response["results"][0]["longitude"]
 
-        weather_url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={long}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum&current=temperature_2m,weather_code&temperature_unit=fahrenheit"
+        # Fetching 16 days to cover most trips
+        weather_url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={long}&daily=weather_code,temperature_2m_max,temperature_2m_min&current=temperature_2m,weather_code&temperature_unit=fahrenheit&forecast_days=16"
         return requests.get(weather_url).json()
     except: return None
 
@@ -108,11 +103,13 @@ def generate_smart_packing_list(city, weather_json, profile_data):
     
     OUTPUT FORMAT (Strict Markdown):
     
-    ### 🌤️ Trip Forecast
-    [Brief specific weather advice for Morning/Afternoon/Evening]
+    ### 🌤️ Detailed Forecast Advice
+    * **Morning:** [Specific layering advice]
+    * **Afternoon:** [Specific layering advice]
+    * **Evening:** [Specific layering advice]
 
     ### ✈️ Wear On Plane (Space Saver)
-    * List heavy items here.
+    * List heavy items here (Jackets/Boots).
     
     ### 🎒 The Packing List
     | Category | Item | Qty | Notes |
@@ -129,7 +126,7 @@ def generate_smart_packing_list(city, weather_json, profile_data):
     return response.text
 
 # 5. UI Setup
-st.set_page_config(page_title="TravelCast AI v4.0", page_icon="🧳", layout="wide") 
+st.set_page_config(page_title="TravelCast AI v4.2", page_icon="🧳", layout="wide") 
 st.title("🧳 Luggage Optimizer (TravelCast AI)")
 st.caption("Capacity Calculation + AI Styling")
 
@@ -157,55 +154,83 @@ with st.container():
         walking = st.select_slider("Walking", ["Low", "Medium", "High"])
 
 # --- REAL-TIME CALCULATOR ---
-# We calculate this BEFORE the button press to give instant feedback
 luggage_counts = {"backpack": backpacks, "carry_on": carry_ons, "checked": checked}
+metrics = None
+
 if arrival_date and depart_date:
     dur = max(1, (depart_date - arrival_date).days + 1)
-    
-    # Run the Math
     metrics = calculate_capacity_metrics(luggage_counts, dur, shopping, formal_count, walking)
     
     st.divider()
     st.subheader("📊 Luggage Capacity Analysis")
     
-    # Display the Progress Bar
     bar_color = "red" if metrics['is_overpacked'] else "green"
     st.progress(metrics['usage_pct'])
     
-    # Display the Data
     m_col1, m_col2, m_col3 = st.columns(3)
-    with m_col1:
-        st.metric("Total Capacity", f"{metrics['total_L']} Liters")
-    with m_col2:
-        st.metric("Est. Clothing Load", f"{metrics['used_L']} Liters")
-    with m_col3:
-        st.metric("Reserved for Shopping", f"{metrics['reserved_L']} Liters")
+    with m_col1: st.metric("Total Capacity", f"{metrics['total_L']} Liters")
+    with m_col2: st.metric("Est. Clothing Load", f"{metrics['used_L']} Liters")
+    with m_col3: st.metric("Reserved for Shopping", f"{metrics['reserved_L']} Liters")
 
     if metrics['is_overpacked']:
-        st.error(f"⚠️ OVERPACKED! You are trying to fit {metrics['used_L'] + metrics['reserved_L']}L into a {metrics['total_L']}L container. Add a bag or cut the shopping.")
+        st.error(f"⚠️ OVERPACKED! You are trying to fit {metrics['used_L'] + metrics['reserved_L']}L into a {metrics['total_L']}L container.")
     else:
-        st.success(f"✅ Safe! You have {round(metrics['total_L'] - metrics['used_L'] - metrics['reserved_L'], 1)}L of free space remaining.")
+        st.success(f"✅ Safe! You have {round(metrics['total_L'] - metrics['used_L'] - metrics['reserved_L'], 1)}L of free space.")
 
 # --- GENERATE BUTTON ---
 if st.button("Generate Optimized List", type="primary"):
-    if metrics['is_overpacked']:
-        st.warning("Proceeding, but the AI will have to cut items aggressively to fit.")
-        
-    with st.spinner("Optimizing wardrobe..."):
-        weather_data = get_weather_data(city)
-        if weather_data:
-            _, shop_note = get_trip_context(arrival_date, depart_date, shopping, luggage_counts)
+    if not city:
+        st.error("Please enter a city.")
+    else:
+        if metrics and metrics['is_overpacked']:
+            st.warning("Proceeding, but the AI will have to cut items aggressively to fit.")
             
-            payload = {
-                "duration": dur,
-                "purpose": purpose,
-                "formal_count": formal_count,
-                "luggage_counts": luggage_counts,
-                "shopping_note": shop_note,
-                "gender": "User", "age": "Adult", "walking": walking # Simplified for demo
-            }
+        with st.spinner("Analyzing weather satellites & optimizing wardrobe..."):
+            weather_data = get_weather_data(city)
             
-            res = generate_smart_packing_list(city, weather_data, payload)
-            st.markdown(res)
-        else:
-            st.error("City not found.")
+            if weather_data and "daily" in weather_data:
+                # --- NEW: VISUAL WEATHER STRIP ---
+                st.divider()
+                st.subheader(f"🌤️ Weather Forecast: {city}")
+                
+                # Create a horizontal scrollable container or columns
+                daily_data = weather_data['daily']
+                dates = daily_data['time']
+                codes = daily_data['weather_code']
+                max_temps = daily_data['temperature_2m_max']
+                min_temps = daily_data['temperature_2m_min']
+                
+                # We slice the data to match the user's trip dates if possible
+                # Note: This simple logic assumes the forecast API returned dates matching the trip.
+                # In production, you'd match the specific date strings.
+                
+                weather_cols = st.columns(min(7, len(dates))) # Show max 7 days to fit screen
+                
+                for i, col in enumerate(weather_cols):
+                    if i < len(dates):
+                        day_date = datetime.strptime(dates[i], "%Y-%m-%d").strftime("%b %d")
+                        emoji = get_weather_emoji(codes[i])
+                        high = round(max_temps[i])
+                        low = round(min_temps[i])
+                        
+                        with col:
+                            st.markdown(f"**{day_date}**")
+                            st.markdown(f"# {emoji}")
+                            st.caption(f"H: {high}° / L: {low}°")
+                
+                # --- AI GENERATION ---
+                _, shop_note = get_trip_context(arrival_date, depart_date, shopping, luggage_counts)
+                
+                payload = {
+                    "duration": dur,
+                    "purpose": purpose,
+                    "formal_count": formal_count,
+                    "luggage_counts": luggage_counts,
+                    "shopping_note": shop_note,
+                    "gender": "User", "age": "Adult", "walking": walking
+                }
+                
+                res = generate_smart_packing_list(city, weather_data, payload)
+                st.markdown(res)
+            else:
+                st.error("Could not retrieve weather data. City might be spelled incorrectly.")
