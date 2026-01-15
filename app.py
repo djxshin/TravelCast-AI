@@ -160,7 +160,7 @@ def generate_smart_packing_list(city, weather_json, profile_data):
     return response.text
 
 # 5. UI Setup
-st.set_page_config(page_title="TravelCast AI v5.6", page_icon="🧳", layout="wide") 
+st.set_page_config(page_title="TravelCast AI v5.7", page_icon="🧳", layout="wide") 
 st.title("🧳 Luggage Optimizer (TravelCast AI)")
 st.caption("Capacity Calculation + AI Styling")
 
@@ -270,24 +270,34 @@ if st.button("Generate Optimized List", type="primary"):
                 st.divider()
                 st.subheader(f"🌤️ Weather Forecast: {city}")
                 
-                # 1. Render Weather Icons First
+                # --- NEW HORIZONTAL SCROLL WEATHER STRIP ---
                 daily_data = weather_data['daily']
                 dates = daily_data['time']
                 codes = daily_data['weather_code']
                 max_temps = daily_data['temperature_2m_max']
                 min_temps = daily_data['temperature_2m_min']
                 
-                weather_cols = st.columns(min(7, len(dates))) 
-                for i, col in enumerate(weather_cols):
-                    if i < len(dates):
-                        day_date = datetime.strptime(dates[i], "%Y-%m-%d").strftime("%b %d")
-                        emoji = get_weather_emoji(codes[i])
-                        high = round(max_temps[i])
-                        low = round(min_temps[i])
-                        with col:
-                            st.markdown(f"**{day_date}**")
-                            st.markdown(f"# {emoji}")
-                            st.caption(f"H: {high}° / L: {low}°")
+                # Build HTML string for horizontal scroll
+                weather_html = """
+                <div style="display: flex; overflow-x: auto; gap: 12px; padding-bottom: 10px; margin-bottom: 20px; white-space: nowrap;">
+                """
+                
+                for i in range(min(7, len(dates))):
+                    day_date = datetime.strptime(dates[i], "%Y-%m-%d").strftime("%b %d")
+                    emoji = get_weather_emoji(codes[i])
+                    high = round(max_temps[i])
+                    low = round(min_temps[i])
+                    
+                    weather_html += f"""
+                    <div style="min-width: 85px; text-align: center; border: 1px solid #444; border-radius: 10px; padding: 10px; background-color: rgba(255,255,255,0.05);">
+                        <div style="font-weight: bold; font-size: 14px; margin-bottom: 5px;">{day_date}</div>
+                        <div style="font-size: 28px; margin-bottom: 5px;">{emoji}</div>
+                        <div style="font-size: 12px; opacity: 0.8;">{high}° / {low}°</div>
+                    </div>
+                    """
+                
+                weather_html += "</div>"
+                st.markdown(weather_html, unsafe_allow_html=True)
                 
                 # 2. Get Context & Generate AI
                 _, shop_note = get_trip_context(arrival_date, depart_date, shopping, luggage_counts)
@@ -306,12 +316,7 @@ if st.button("Generate Optimized List", type="primary"):
                 # 3. Split Response
                 if "### 💡 Pro Tip" in full_response:
                     main_content, pro_tip_content = full_response.split("### 💡 Pro Tip")
-                    
-                    # Render Main Content (Daily Planner + List)
-                    # NOTE: Since AI puts Daily Planner first, it will appear right here, under the icons.
                     st.markdown(main_content)
-                    
-                    # Render Pro Tip as Exclusive Toggle
                     st.divider()
                     with st.expander("💡 **Insider Pro Tip (Tap to Unlock)**"):
                         st.markdown(pro_tip_content.strip())
