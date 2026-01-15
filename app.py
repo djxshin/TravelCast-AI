@@ -37,21 +37,52 @@ def translate_liters_to_goods(liters):
     else:
         return "🛍️ Fits: Massive Haul! Multiple coats, appliances, shoes for the whole family."
 
-# --- CAPACITY ENGINE ---
-def calculate_capacity_metrics(luggage_counts, duration, shopping_intent, formal_count, walking_level):
+# --- WEATHER TOOL (NOW CACHED ⚡) ---
+# We moved this UP so the calculator can use it instantly
+@st.cache_data(ttl=3600) # Remembers data for 1 hour to save API calls
+def get_weather_data(city_name):
+    try:
+        geo_url = f"https://geocoding-api.open-meteo.com/v1/search?name={city_name}&count=1&language=en&format=json"
+        geo_response = requests.get(geo_url).json()
+        if "results" not in geo_response: return None
+        
+        lat = geo_response["results"][0]["latitude"]
+        long = geo_response["results"][0]["longitude"]
+
+        weather_url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={long}&daily=weather_code,temperature_2m_max,temperature_2m_min&current=temperature_2m,weather_code&temperature_unit=fahrenheit&forecast_days=16"
+        return requests.get(weather_url).json()
+    except: return None
+
+# --- CAPACITY ENGINE (UPDATED WITH LOGIC v5.1) ---
+def calculate_capacity_metrics(luggage_counts, duration, shopping_intent, formal_count, walking_level, avg_temp=None):
+    # A. Define Capacities
     CAPACITY_MAP = { "backpack": 20, "carry_on": 40, "checked": 100 }
     
     total_capacity = (luggage_counts['backpack'] * CAPACITY_MAP['backpack']) + \
                      (luggage_counts['carry_on'] * CAPACITY_MAP['carry_on']) + \
                      (luggage_counts['checked'] * CAPACITY_MAP['checked'])
     
-    daily_load = 3.5 
+    # B. Define Consumption (Dynamic)
+    base_daily_load = 3.5 
+    
+    # --- LOGIC UPGRADE: TEMPERATURE FACTOR ---
+    bulk_multiplier = 1.0
+    if avg_temp is not None:
+        if avg_temp < 50: # Cold: Heavy knits/jackets
+            bulk_multiplier = 1.4
+        elif avg_temp > 75: # Hot: Light fabrics
+            bulk_multiplier = 0.8
+    
+    daily_load = base_daily_load * bulk_multiplier
+    
+    # Fixed loads
     tech_kit = 2.0 
     shoes_vol = 3.0 if walking_level == "High" else 1.5
     formal_vol = 4.0 * formal_count 
     
     estimated_load = (duration * daily_load) + tech_kit + shoes_vol + formal_vol
     
+    # C. Shopping Reserve
     SHOPPING_RESERVE = { "None": 0.0, "Light": 0.10, "Medium": 0.20, "Heavy": 0.30 }
     reserve_pct = SHOPPING_RESERVE[shopping_intent]
     reserved_space = total_capacity * reserve_pct
@@ -65,22 +96,9 @@ def calculate_capacity_metrics(luggage_counts, duration, shopping_intent, formal
         "used_L": round(final_used, 1),
         "reserved_L": round(reserved_space, 1),
         "usage_pct": min(usage_pct, 1.0),
-        "is_overpacked": usage_pct > 1.0
+        "is_overpacked": usage_pct > 1.0,
+        "bulk_multiplier": bulk_multiplier # Returning this so we can show the user
     }
-
-# 2. Weather Tool
-def get_weather_data(city_name):
-    try:
-        geo_url = f"https://geocoding-api.open-meteo.com/v1/search?name={city_name}&count=1&language=en&format=json"
-        geo_response = requests.get(geo_url).json()
-        if "results" not in geo_response: return None
-        
-        lat = geo_response["results"][0]["latitude"]
-        long = geo_response["results"][0]["longitude"]
-
-        weather_url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={long}&daily=weather_code,temperature_2m_max,temperature_2m_min&current=temperature_2m,weather_code&temperature_unit=fahrenheit&forecast_days=16"
-        return requests.get(weather_url).json()
-    except: return None
 
 # 3. Logic Helper
 def get_trip_context(arrival, depart, shopping_intent, luggage_counts):
@@ -141,7 +159,7 @@ def generate_smart_packing_list(city, weather_json, profile_data):
     return response.text
 
 # 5. UI Setup
-st.set_page_config(page_title="TravelCast AI v5.0", page_icon="🧳", layout="wide") 
+st.set_page_config(page_title="TravelCast AI v5.1", page_icon="🧳", layout="wide") 
 st.title("🧳 Luggage Optimizer (TravelCast AI)")
 st.caption("Capacity Calculation + AI Styling")
 
@@ -150,6 +168,7 @@ with st.container():
     col1, col2 = st.columns(2)
     with col1:
         st.subheader("1. Trip Details")
+        # We need the city defined early for the real-time weather fetch
         city = st.text_input("Destination", placeholder="e.g. Tokyo")
         arrival_date = st.date_input("Arrival")
         depart_date = st.date_input("Departure")
@@ -171,14 +190,25 @@ with st.container():
 # --- REAL-TIME CALCULATOR (THE NEW DASHBOARD UI) ---
 luggage_counts = {"backpack": backpacks, "carry_on": carry_ons, "checked": checked}
 metrics = None
+avg_temp_preview = None
 
+# 1. Background Weather Fetch (Logic Upgrade)
+if city:
+    weather_preview = get_weather_data(city)
+    if weather_preview and 'current' in weather_preview:
+        # Get a rough idea of the temperature to adjust the calculator
+        avg_temp_preview = weather_preview['current']['temperature_2m']
+
+# 2. Run Calculator
 if arrival_date and depart_date:
     dur = max(1, (depart_date - arrival_date).days + 1)
-    metrics = calculate_capacity_metrics(luggage_counts, dur, shopping, formal_count, walking)
+    
+    # Pass the temp to the calculator!
+    metrics = calculate_capacity_metrics(luggage_counts, dur, shopping, formal_count, walking, avg_temp=avg_temp_preview)
     
     st.divider()
     
-    # --- 1. THE HEADER ---
+    # --- HEADER ---
     if metrics['is_overpacked']:
         st.error(f"⚠️ **OVERPACKED!** You need {metrics['used_L'] + metrics['reserved_L']}L but only have {metrics['total_L']}L.")
     else:
@@ -187,13 +217,19 @@ if arrival_date and depart_date:
         pct_reserved = (metrics['reserved_L'] / metrics['total_L']) * 100
         pct_free = 100 - pct_used - pct_reserved
         
-        # Calculate realities
         physical_free = round(metrics['total_L'] - metrics['used_L'], 1)
         total_potential = round(physical_free + metrics['reserved_L'], 1)
         
-        st.markdown(f"### ✅ Ready to Pack! ({int(pct_free)}% Empty)")
+        # Display the "Bulk Factor" if it's active
+        factor_msg = ""
+        if metrics['bulk_multiplier'] > 1.0:
+            factor_msg = "❄️ (Winter Gear detected: +40% Vol)"
+        elif metrics['bulk_multiplier'] < 1.0:
+            factor_msg = "☀️ (Summer Gear detected: -20% Vol)"
+            
+        st.markdown(f"### ✅ Ready to Pack! ({int(pct_free)}% Empty) {factor_msg}")
 
-        # --- 2. THE CLEAN BAR (Gray | Purple | Green) ---
+        # --- THE CLEAN BAR ---
         st.markdown(f"""
         <div style="display: flex; width: 100%; height: 24px; border-radius: 8px; overflow: hidden; margin-bottom: 12px; border: 1px solid #ddd;">
             <div style="width: {pct_used}%; background-color: #7f8c8d;"></div>
@@ -202,7 +238,7 @@ if arrival_date and depart_date:
         </div>
         """, unsafe_allow_html=True)
         
-        # --- 3. THE LEGEND ---
+        # --- THE LEGEND ---
         st.markdown(f"""
         <div style="display: flex; justify-content: space-between; font-family: sans-serif; font-size: 14px; color: #444; margin-bottom: 25px;">
             <div style="display: flex; align-items: center;">
@@ -217,13 +253,12 @@ if arrival_date and depart_date:
         </div>
         """, unsafe_allow_html=True)
 
-        # --- 4. THE SUMMARY CARD (Unified) ---
+        # --- THE SUMMARY CARD ---
         with st.container(border=True):
             st.markdown("**🛍️ Total Shopping Potential**")
             st.markdown(f"<h1 style='margin: 0; font-size: 32px;'>{total_potential} Liters</h1>", unsafe_allow_html=True)
             st.caption(f"_{translate_liters_to_goods(total_potential)}_")
             
-            # Contextual Warning
             if total_potential > 60:
                  st.warning("⚠️ **Checked Bag Warning:** Filling this entire volume will likely exceed the 50lb (23kg) weight limit. Please weigh your bag before heading to the airport.")
 
@@ -236,6 +271,7 @@ if st.button("Generate Optimized List", type="primary"):
             st.warning("Proceeding, but the AI will have to cut items aggressively to fit.")
             
         with st.spinner("Analyzing weather satellites & optimizing wardrobe..."):
+            # We fetch again (cached!) for the AI context
             weather_data = get_weather_data(city)
             
             if weather_data and "daily" in weather_data:
