@@ -37,9 +37,8 @@ def translate_liters_to_goods(liters):
     else:
         return "🛍️ Fits: Massive Haul! Multiple coats, appliances, shoes for the whole family."
 
-# --- WEATHER TOOL (NOW CACHED ⚡) ---
-# We moved this UP so the calculator can use it instantly
-@st.cache_data(ttl=3600) # Remembers data for 1 hour to save API calls
+# --- WEATHER TOOL (CACHED) ---
+@st.cache_data(ttl=3600) 
 def get_weather_data(city_name):
     try:
         geo_url = f"https://geocoding-api.open-meteo.com/v1/search?name={city_name}&count=1&language=en&format=json"
@@ -53,7 +52,7 @@ def get_weather_data(city_name):
         return requests.get(weather_url).json()
     except: return None
 
-# --- CAPACITY ENGINE (UPDATED WITH LOGIC v5.1) ---
+# --- CAPACITY ENGINE ---
 def calculate_capacity_metrics(luggage_counts, duration, shopping_intent, formal_count, walking_level, avg_temp=None):
     # A. Define Capacities
     CAPACITY_MAP = { "backpack": 20, "carry_on": 40, "checked": 100 }
@@ -65,7 +64,7 @@ def calculate_capacity_metrics(luggage_counts, duration, shopping_intent, formal
     # B. Define Consumption (Dynamic)
     base_daily_load = 3.5 
     
-    # --- LOGIC UPGRADE: TEMPERATURE FACTOR ---
+    # Temperature Factor
     bulk_multiplier = 1.0
     if avg_temp is not None:
         if avg_temp < 50: # Cold: Heavy knits/jackets
@@ -97,7 +96,7 @@ def calculate_capacity_metrics(luggage_counts, duration, shopping_intent, formal
         "reserved_L": round(reserved_space, 1),
         "usage_pct": min(usage_pct, 1.0),
         "is_overpacked": usage_pct > 1.0,
-        "bulk_multiplier": bulk_multiplier # Returning this so we can show the user
+        "bulk_multiplier": bulk_multiplier
     }
 
 # 3. Logic Helper
@@ -116,14 +115,14 @@ def get_trip_context(arrival, depart, shopping_intent, luggage_counts):
 
     return duration, shopping_note
 
-# 4. AI Generator
+# 4. AI Generator (Updated for Conciseness & Structure)
 def generate_smart_packing_list(city, weather_json, profile_data):
     formal_instruction = "No formal events."
     if profile_data['formal_count'] > 0:
         formal_instruction = f"IMPORTANT: User has {profile_data['formal_count']} formal events. Include exactly {profile_data['formal_count']} formal outfits."
 
     prompt = f"""
-    Act as an elite Travel Stylist. 
+    Act as an Expert Travel Logistics Manager.
     
     DESTINATION: {city}
     WEATHER: {weather_json.get('daily', 'N/A')}
@@ -131,18 +130,20 @@ def generate_smart_packing_list(city, weather_json, profile_data):
     
     CONSTRAINTS: 
     1. {profile_data['shopping_note']}
-    2. SPACE SAVER: Identify bulky items (Coats, Boots) to WEAR ON PLANE.
-    3. {formal_instruction}
+    2. BREVITY: Keep item descriptions under 10 words. Functional only.
+    3. DAILY PLANNER: This must be SHORT and punchy. Maximum 15 words per time block.
+    4. NO FLUFF: Do not describe colors or vibes.
     
     OUTPUT FORMAT (Strict Markdown):
     
-    ### 🌤️ Detailed Forecast Advice
-    * **Morning:** [Specific layering advice]
-    * **Afternoon:** [Specific layering advice]
-    * **Evening:** [Specific layering advice]
-
-    ### ✈️ Wear On Plane (Space Saver)
-    * List heavy items here (Jackets/Boots).
+    ### 🌤️ Daily Planner
+    * **Morning:** [Max 15 words. Specific layering tactic.]
+    * **Afternoon:** [Max 15 words. Specific layering tactic.]
+    * **Evening:** [Max 15 words. Specific layering tactic.]
+    
+    ### ✈️ Wear On Plane (Space Savers)
+    * **[Item 1]:** [Brief reason]
+    * **[Item 2]:** [Brief reason]
     
     ### 🎒 The Packing List
     | Category | Item | Qty | Notes |
@@ -150,16 +151,16 @@ def generate_smart_packing_list(city, weather_json, profile_data):
     | Tops | ... | ... | ... |
     | Bottoms | ... | ... | ... |
     | Shoes | ... | ... | ... |
-    
+
     ### 💡 Pro Tip
-    * [One specific tip based on destination]
+    [Write a detailed, high-value strategic tip here. This is the "If you know you know" section.]
     """
     
     response = client.models.generate_content(model="gemini-flash-latest", contents=prompt)
     return response.text
 
 # 5. UI Setup
-st.set_page_config(page_title="TravelCast AI v5.1", page_icon="🧳", layout="wide") 
+st.set_page_config(page_title="TravelCast AI v5.6", page_icon="🧳", layout="wide") 
 st.title("🧳 Luggage Optimizer (TravelCast AI)")
 st.caption("Capacity Calculation + AI Styling")
 
@@ -168,7 +169,6 @@ with st.container():
     col1, col2 = st.columns(2)
     with col1:
         st.subheader("1. Trip Details")
-        # We need the city defined early for the real-time weather fetch
         city = st.text_input("Destination", placeholder="e.g. Tokyo")
         arrival_date = st.date_input("Arrival")
         depart_date = st.date_input("Departure")
@@ -187,31 +187,23 @@ with st.container():
         formal_count = st.number_input("Count", 1, 10, 1) if is_formal else 0
         walking = st.select_slider("Walking", ["Low", "Medium", "High"])
 
-# --- REAL-TIME CALCULATOR (THE NEW DASHBOARD UI) ---
+# --- REAL-TIME CALCULATOR ---
 luggage_counts = {"backpack": backpacks, "carry_on": carry_ons, "checked": checked}
 metrics = None
 avg_temp_preview = None
 
-# 1. Background Weather Fetch (Logic Upgrade)
 if city:
     weather_preview = get_weather_data(city)
     if weather_preview and 'current' in weather_preview:
-        # Get a rough idea of the temperature to adjust the calculator
         avg_temp_preview = weather_preview['current']['temperature_2m']
 
-# 2. Run Calculator
 if arrival_date and depart_date:
     dur = max(1, (depart_date - arrival_date).days + 1)
-    
-    # Pass the temp to the calculator!
     metrics = calculate_capacity_metrics(luggage_counts, dur, shopping, formal_count, walking, avg_temp=avg_temp_preview)
     
-    st.divider()
-    
-    # --- HEADER ---
-    if metrics['is_overpacked']:
-        st.error(f"⚠️ **OVERPACKED!** You need {metrics['used_L'] + metrics['reserved_L']}L but only have {metrics['total_L']}L.")
-    else:
+    # --- SILENT HEADER (Only show positive, hide error) ---
+    if not metrics['is_overpacked']:
+        st.divider()
         # Calculate percentages
         pct_used = (metrics['used_L'] / metrics['total_L']) * 100
         pct_reserved = (metrics['reserved_L'] / metrics['total_L']) * 100
@@ -220,18 +212,19 @@ if arrival_date and depart_date:
         physical_free = round(metrics['total_L'] - metrics['used_L'], 1)
         total_potential = round(physical_free + metrics['reserved_L'], 1)
         
-        # Display the "Bulk Factor" if it's active
-        factor_msg = ""
-        if metrics['bulk_multiplier'] > 1.0:
-            factor_msg = "❄️ (Winter Gear detected: +40% Vol)"
-        elif metrics['bulk_multiplier'] < 1.0:
-            factor_msg = "☀️ (Summer Gear detected: -20% Vol)"
-            
-        st.markdown(f"### ✅ Ready to Pack! ({int(pct_free)}% Empty) {factor_msg}")
+        # --- NEW CLEANER HEADER ---
+        st.markdown("### ✅ Ready to Pack!")
+        
+        # Small Caption for context
+        weather_note = ""
+        if metrics['bulk_multiplier'] > 1.0: weather_note = " • ❄️ Winter Bulk Detected"
+        elif metrics['bulk_multiplier'] < 1.0: weather_note = " • ☀️ Summer Light Load"
+        
+        st.caption(f"Estimated {int(pct_free)}% Free Space{weather_note}")
 
-        # --- THE CLEAN BAR ---
+        # --- THE BIGGER VISUAL BAR (50px) ---
         st.markdown(f"""
-        <div style="display: flex; width: 100%; height: 24px; border-radius: 8px; overflow: hidden; margin-bottom: 12px; border: 1px solid #ddd;">
+        <div style="display: flex; width: 100%; height: 50px; border-radius: 12px; overflow: hidden; margin-bottom: 12px; border: 1px solid #ddd; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
             <div style="width: {pct_used}%; background-color: #7f8c8d;"></div>
             <div style="width: {pct_reserved}%; background-color: #9b59b6;"></div>
             <div style="width: {pct_free}%; background-color: #2ecc71;"></div>
@@ -240,15 +233,15 @@ if arrival_date and depart_date:
         
         # --- THE LEGEND ---
         st.markdown(f"""
-        <div style="display: flex; justify-content: space-between; font-family: sans-serif; font-size: 14px; color: #444; margin-bottom: 25px;">
+        <div style="display: flex; justify-content: space-between; font-family: sans-serif; font-size: 13px; color: #666; margin-bottom: 25px;">
             <div style="display: flex; align-items: center;">
-                <span style="color: #7f8c8d; font-size: 20px; line-height: 0;">●</span>&nbsp;<span><b>Clothes</b> ({int(pct_used)}%)</span>
+                <span style="color: #7f8c8d; font-size: 16px; line-height: 0;">●</span>&nbsp;<span>Clothes</span>
             </div>
             <div style="display: flex; align-items: center;">
-                <span style="color: #9b59b6; font-size: 20px; line-height: 0;">●</span>&nbsp;<span><b>Shopping</b> ({int(pct_reserved)}%)</span>
+                <span style="color: #9b59b6; font-size: 16px; line-height: 0;">●</span>&nbsp;<span>Shopping</span>
             </div>
             <div style="display: flex; align-items: center;">
-                <span style="color: #2ecc71; font-size: 20px; line-height: 0;">●</span>&nbsp;<span><b>Free Space</b> ({int(pct_free)}%)</span>
+                <span style="color: #2ecc71; font-size: 16px; line-height: 0;">●</span>&nbsp;<span>Free Space</span>
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -268,16 +261,16 @@ if st.button("Generate Optimized List", type="primary"):
         st.error("Please enter a city.")
     else:
         if metrics and metrics['is_overpacked']:
-            st.warning("Proceeding, but the AI will have to cut items aggressively to fit.")
+             st.error(f"⚠️ **OVERPACKED!** You need {metrics['used_L'] + metrics['reserved_L']}L but only have {metrics['total_L']}L. Proceeding, but the AI will cut items aggressively.")
             
         with st.spinner("Analyzing weather satellites & optimizing wardrobe..."):
-            # We fetch again (cached!) for the AI context
             weather_data = get_weather_data(city)
             
             if weather_data and "daily" in weather_data:
                 st.divider()
                 st.subheader(f"🌤️ Weather Forecast: {city}")
                 
+                # 1. Render Weather Icons First
                 daily_data = weather_data['daily']
                 dates = daily_data['time']
                 codes = daily_data['weather_code']
@@ -285,7 +278,6 @@ if st.button("Generate Optimized List", type="primary"):
                 min_temps = daily_data['temperature_2m_min']
                 
                 weather_cols = st.columns(min(7, len(dates))) 
-                
                 for i, col in enumerate(weather_cols):
                     if i < len(dates):
                         day_date = datetime.strptime(dates[i], "%Y-%m-%d").strftime("%b %d")
@@ -297,6 +289,7 @@ if st.button("Generate Optimized List", type="primary"):
                             st.markdown(f"# {emoji}")
                             st.caption(f"H: {high}° / L: {low}°")
                 
+                # 2. Get Context & Generate AI
                 _, shop_note = get_trip_context(arrival_date, depart_date, shopping, luggage_counts)
                 
                 payload = {
@@ -308,7 +301,22 @@ if st.button("Generate Optimized List", type="primary"):
                     "gender": "User", "age": "Adult", "walking": walking
                 }
                 
-                res = generate_smart_packing_list(city, weather_data, payload)
-                st.markdown(res)
+                full_response = generate_smart_packing_list(city, weather_data, payload)
+                
+                # 3. Split Response
+                if "### 💡 Pro Tip" in full_response:
+                    main_content, pro_tip_content = full_response.split("### 💡 Pro Tip")
+                    
+                    # Render Main Content (Daily Planner + List)
+                    # NOTE: Since AI puts Daily Planner first, it will appear right here, under the icons.
+                    st.markdown(main_content)
+                    
+                    # Render Pro Tip as Exclusive Toggle
+                    st.divider()
+                    with st.expander("💡 **Insider Pro Tip (Tap to Unlock)**"):
+                        st.markdown(pro_tip_content.strip())
+                else:
+                    st.markdown(full_response)
+                    
             else:
                 st.error("Could not retrieve weather data. City might be spelled incorrectly.")
