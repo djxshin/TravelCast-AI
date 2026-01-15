@@ -160,32 +160,32 @@ def generate_smart_packing_list(city, weather_json, profile_data):
     return response.text
 
 # 5. UI Setup
-st.set_page_config(page_title="TravelCast AI v5.7", page_icon="🧳", layout="wide") 
+st.set_page_config(page_title="TravelCast AI v5.8", page_icon="🧳", layout="wide") 
 st.title("🧳 Luggage Optimizer (TravelCast AI)")
 st.caption("Capacity Calculation + AI Styling")
 
-# --- INPUT SECTION ---
-with st.container():
-    col1, col2 = st.columns(2)
-    with col1:
-        st.subheader("1. Trip Details")
-        city = st.text_input("Destination", placeholder="e.g. Tokyo")
-        arrival_date = st.date_input("Arrival")
-        depart_date = st.date_input("Departure")
-        purpose = st.multiselect("Purpose", ["Business", "Vacation", "Adventure", "Romantic"])
-        
-    with col2:
-        st.subheader("2. Luggage & Load")
-        c_lug1, c_lug2, c_lug3 = st.columns(3)
-        with c_lug1: backpacks = st.number_input("Backpacks (20L)", 0, 3, 1)
-        with c_lug2: carry_ons = st.number_input("Carry-ons (40L)", 0, 3, 0)
-        with c_lug3: checked = st.number_input("Checked (100L)", 0, 3, 0)
-        
-        shopping = st.select_slider("Shopping Intent", ["None", "Light", "Medium", "Heavy"])
-        
-        is_formal = st.checkbox("Formal Events?")
-        formal_count = st.number_input("Count", 1, 10, 1) if is_formal else 0
-        walking = st.select_slider("Walking", ["Low", "Medium", "High"])
+# --- INPUT SECTION (Simplified Layout for Mobile) ---
+# Removed the outer st.container() to reduce layout thrashing on mobile keyboards
+col1, col2 = st.columns(2)
+with col1:
+    st.subheader("1. Trip Details")
+    city = st.text_input("Destination", placeholder="e.g. Tokyo")
+    arrival_date = st.date_input("Arrival")
+    depart_date = st.date_input("Departure")
+    purpose = st.multiselect("Purpose", ["Business", "Vacation", "Adventure", "Romantic"])
+    
+with col2:
+    st.subheader("2. Luggage & Load")
+    c_lug1, c_lug2, c_lug3 = st.columns(3)
+    with c_lug1: backpacks = st.number_input("Backpacks (20L)", 0, 3, 1)
+    with c_lug2: carry_ons = st.number_input("Carry-ons (40L)", 0, 3, 0)
+    with c_lug3: checked = st.number_input("Checked (100L)", 0, 3, 0)
+    
+    shopping = st.select_slider("Shopping Intent", ["None", "Light", "Medium", "Heavy"])
+    
+    is_formal = st.checkbox("Formal Events?")
+    formal_count = st.number_input("Count", 1, 10, 1) if is_formal else 0
+    walking = st.select_slider("Walking", ["Low", "Medium", "High"])
 
 # --- REAL-TIME CALCULATOR ---
 luggage_counts = {"backpack": backpacks, "carry_on": carry_ons, "checked": checked}
@@ -279,7 +279,7 @@ if st.button("Generate Optimized List", type="primary"):
                 
                 # Build HTML string for horizontal scroll
                 weather_html = """
-                <div style="display: flex; overflow-x: auto; gap: 12px; padding-bottom: 10px; margin-bottom: 20px; white-space: nowrap;">
+                <div style="display: flex; overflow-x: auto; gap: 12px; padding-bottom: 10px; margin-bottom: 20px; white-space: nowrap; -webkit-overflow-scrolling: touch;">
                 """
                 
                 for i in range(min(7, len(dates))):
@@ -289,7 +289,7 @@ if st.button("Generate Optimized List", type="primary"):
                     low = round(min_temps[i])
                     
                     weather_html += f"""
-                    <div style="min-width: 85px; text-align: center; border: 1px solid #444; border-radius: 10px; padding: 10px; background-color: rgba(255,255,255,0.05);">
+                    <div style="min-width: 85px; text-align: center; border: 1px solid #444; border-radius: 10px; padding: 10px; background-color: rgba(255,255,255,0.05); display: inline-block;">
                         <div style="font-weight: bold; font-size: 14px; margin-bottom: 5px;">{day_date}</div>
                         <div style="font-size: 28px; margin-bottom: 5px;">{emoji}</div>
                         <div style="font-size: 12px; opacity: 0.8;">{high}° / {low}°</div>
@@ -297,6 +297,7 @@ if st.button("Generate Optimized List", type="primary"):
                     """
                 
                 weather_html += "</div>"
+                # This is the critical line that must be on the server to fix the HTML issue
                 st.markdown(weather_html, unsafe_allow_html=True)
                 
                 # 2. Get Context & Generate AI
