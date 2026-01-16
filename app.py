@@ -90,7 +90,7 @@ def get_trip_context(arrival, depart, shopping_intent, luggage_counts):
         else: shopping_note = "CRITICAL: Heavy shopping with Backpack. Minimalist capsule wardrobe only."
     return duration, shopping_note
 
-# 4. AI Generator
+# 4. AI Generator (Restored 'Subway Peel' Logic)
 def generate_smart_packing_list(city, weather_json, profile_data):
     formal_instruction = "No formal events."
     if profile_data['formal_count'] > 0:
@@ -105,7 +105,7 @@ def generate_smart_packing_list(city, weather_json, profile_data):
     1. {profile_data['shopping_note']}
     2. BREVITY: Keep item descriptions under 10 words. Functional only.
     3. DAILY PLANNER: This must be SHORT and punchy. Maximum 15 words per time block.
-    4. PRO TIP: You MUST include the '### 💡 Pro Tip' section at the end with a specific strategy.
+    4. PRO TIP: Focus on 'insider behavior' advice (like the 'Subway Peel' strategy for managing indoor/outdoor temp swings) rather than generic shipping tips.
     
     OUTPUT FORMAT (Strict Markdown):
     ### 🌤️ Daily Planner
@@ -123,29 +123,26 @@ def generate_smart_packing_list(city, weather_json, profile_data):
     | Tops | ... | ... | ... |
     
     ### 💡 Pro Tip
-    [Write a detailed, high-value strategic tip here.]
+    [Write a detailed, strategic tip about managing the local environment/culture, e.g. 'Subway Peel'.]
     """
-    # FIX: Switched to 'gemini-1.5-flash' for better stability
+    # Using 'gemini-flash-latest' as requested
     response = client.models.generate_content(model="gemini-flash-latest", contents=prompt)
     return response.text
 
 # 5. UI Setup
-st.set_page_config(page_title="TravelCast AI v5.10", page_icon="🧳", layout="wide") 
+st.set_page_config(page_title="TravelCast AI v5.11", page_icon="🧳", layout="wide") 
 
 # --- CRITICAL CSS FIX FOR MOBILE WHITESPACE ---
 st.markdown("""
     <style>
-        /* 1. Reduce the crazy default padding on mobile */
         .block-container {
             padding-top: 2rem !important;
             padding-bottom: 5rem !important;
         }
-        /* 2. Force the main app container to fill screen height */
         div[data-testid="stAppViewContainer"] {
             min-height: 100vh;
             overflow-x: hidden;
         }
-        /* 3. Fix Horizontal Scrolling for Weather */
         div[data-testid="stMarkdownContainer"] > div {
              overflow-x: auto !important;
         }
@@ -243,7 +240,7 @@ if st.button("Generate Optimized List", type="primary"):
                     </div>"""
                 weather_html += "</div>"
                 
-                # RENDER WITH HTML ALLOWED (Correctly fixed)
+                # RENDER WITH HTML ALLOWED
                 st.markdown(weather_html, unsafe_allow_html=True)
                 
                 _, shop_note = get_trip_context(arrival_date, depart_date, shopping, luggage_counts)
