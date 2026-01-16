@@ -4,6 +4,7 @@ import os
 from google import genai
 from dotenv import load_dotenv
 from datetime import datetime
+import textwrap
 
 # 1. Load Keys
 load_dotenv()
@@ -130,14 +131,23 @@ def generate_smart_packing_list(city, weather_json, profile_data):
     return response.text
 
 # 5. UI Setup
-st.set_page_config(page_title="TravelCast AI v5.14", page_icon="🧳", layout="wide") 
+st.set_page_config(page_title="TravelCast v6.0", page_icon="🧳", layout="wide") 
 
-# --- SAFE CSS FOR MOBILE (Just cleanup, no experimental stuff) ---
+# --- CSS: FORCE MOBILE LAYOUT ---
 st.markdown("""
     <style>
         .block-container {
             padding-top: 2rem !important;
             padding-bottom: 5rem !important;
+        }
+        .weather-scroll-container {
+            display: flex;
+            overflow-x: auto;
+            gap: 12px;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -191,13 +201,12 @@ if arrival_date and depart_date:
         weather_note = " • ❄️ Winter Bulk" if metrics['bulk_multiplier'] > 1.0 else " • ☀️ Summer Light" if metrics['bulk_multiplier'] < 1.0 else ""
         st.caption(f"Estimated {int(pct_free)}% Free Space{weather_note}")
 
-        st.markdown(f"""
-        <div style="display: flex; width: 100%; height: 50px; border-radius: 12px; overflow: hidden; margin-bottom: 12px; border: 1px solid #ddd;">
-            <div style="width: {pct_used}%; background-color: #7f8c8d;"></div>
-            <div style="width: {pct_reserved}%; background-color: #9b59b6;"></div>
-            <div style="width: {pct_free}%; background-color: #2ecc71;"></div>
-        </div>
-        """, unsafe_allow_html=True)
+        # Removed indentation from this block to prevent code-block rendering
+        st.markdown(f"""<div style="display: flex; width: 100%; height: 50px; border-radius: 12px; overflow: hidden; margin-bottom: 12px; border: 1px solid #ddd;">
+<div style="width: {pct_used}%; background-color: #7f8c8d;"></div>
+<div style="width: {pct_reserved}%; background-color: #9b59b6;"></div>
+<div style="width: {pct_free}%; background-color: #2ecc71;"></div>
+</div>""", unsafe_allow_html=True)
         
         with st.container(border=True):
             st.markdown(f"**🛍️ Total Shopping Potential: {total_potential} Liters**")
@@ -215,20 +224,29 @@ if st.button("Generate Optimized List", type="primary"):
                 st.divider()
                 st.subheader(f"🌤️ Weather: {city}")
                 
-                # --- REVERT: NATIVE STREAMLIT COLUMNS (No HTML) ---
+                # --- HORIZONTAL SCROLL (CUSTOM HTML) ---
                 daily = weather_data['daily']
                 
-                # Create 5 columns (showing 5 days max to fit better on screen)
-                cols = st.columns(5)
-                
-                for i in range(min(5, len(daily['time']))):
+                # FIX: Build string as ONE LINE to avoid indentation/code-block issues
+                cards_html = ""
+                for i in range(min(7, len(daily['time']))):
                     day = datetime.strptime(daily['time'][i], "%Y-%m-%d").strftime("%b %d")
                     emoji = get_weather_emoji(daily['weather_code'][i])
                     high = round(daily['temperature_2m_max'][i])
                     low = round(daily['temperature_2m_min'][i])
                     
-                    with cols[i]:
-                        st.metric(label=day, value=emoji, delta=f"{high}°/{low}°")
+                    cards_html += f"""
+                    <div style="min-width: 85px; text-align: center; border: 1px solid #444; border-radius: 10px; padding: 10px; background-color: rgba(255,255,255,0.05);">
+                        <div style="font-weight: bold; font-size: 14px; margin-bottom: 5px;">{day}</div>
+                        <div style="font-size: 28px; margin-bottom: 5px;">{emoji}</div>
+                        <div style="font-size: 12px; opacity: 0.8;">{high}° / {low}°</div>
+                    </div>
+                    """
+                
+                # FINAL ASSEMBLY: No indentation at the start!
+                final_html = f'<div class="weather-scroll-container">{cards_html}</div>'
+                
+                st.markdown(final_html, unsafe_allow_html=True)
                 
                 # --- AI GENERATION ---
                 _, shop_note = get_trip_context(arrival_date, depart_date, shopping, luggage_counts)
