@@ -90,7 +90,7 @@ def get_trip_context(arrival, depart, shopping_intent, luggage_counts):
         else: shopping_note = "CRITICAL: Heavy shopping with Backpack. Minimalist capsule wardrobe only."
     return duration, shopping_note
 
-# 4. AI Generator (Subway Peel Logic)
+# 4. AI Generator
 def generate_smart_packing_list(city, weather_json, profile_data):
     formal_instruction = "No formal events."
     if profile_data['formal_count'] > 0:
@@ -130,21 +130,14 @@ def generate_smart_packing_list(city, weather_json, profile_data):
     return response.text
 
 # 5. UI Setup
-st.set_page_config(page_title="TravelCast AI v5.13", page_icon="🧳", layout="wide") 
+st.set_page_config(page_title="TravelCast AI v5.14", page_icon="🧳", layout="wide") 
 
-# --- CRITICAL CSS FIX FOR MOBILE WHITESPACE ---
+# --- SAFE CSS FOR MOBILE (Just cleanup, no experimental stuff) ---
 st.markdown("""
     <style>
         .block-container {
             padding-top: 2rem !important;
             padding-bottom: 5rem !important;
-        }
-        div[data-testid="stAppViewContainer"] {
-            min-height: 100vh;
-            overflow-x: hidden;
-        }
-        div[data-testid="stMarkdownContainer"] > div {
-             overflow-x: auto !important;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -222,27 +215,22 @@ if st.button("Generate Optimized List", type="primary"):
                 st.divider()
                 st.subheader(f"🌤️ Weather: {city}")
                 
-                # --- HORIZONTAL WEATHER STRIP ---
+                # --- REVERT: NATIVE STREAMLIT COLUMNS (No HTML) ---
                 daily = weather_data['daily']
-                weather_html = """
-                <div style="display: flex; overflow-x: auto; gap: 12px; padding-bottom: 10px; margin-bottom: 20px; white-space: nowrap; -webkit-overflow-scrolling: touch;">
-                """
-                for i in range(min(7, len(daily['time']))):
+                
+                # Create 5 columns (showing 5 days max to fit better on screen)
+                cols = st.columns(5)
+                
+                for i in range(min(5, len(daily['time']))):
                     day = datetime.strptime(daily['time'][i], "%Y-%m-%d").strftime("%b %d")
                     emoji = get_weather_emoji(daily['weather_code'][i])
                     high = round(daily['temperature_2m_max'][i])
                     low = round(daily['temperature_2m_min'][i])
-                    weather_html += f"""
-                    <div style="min-width: 80px; text-align: center; border: 1px solid #444; border-radius: 10px; padding: 10px; background-color: rgba(255,255,255,0.05); display: inline-block;">
-                        <div style="font-weight: bold; font-size: 14px;">{day}</div>
-                        <div style="font-size: 24px;">{emoji}</div>
-                        <div style="font-size: 12px; opacity: 0.8;">{high}°/{low}°</div>
-                    </div>"""
-                weather_html += "</div>"
+                    
+                    with cols[i]:
+                        st.metric(label=day, value=emoji, delta=f"{high}°/{low}°")
                 
-                # THIS IS THE FIX. IT MUST BE HERE.
-                st.markdown(weather_html, unsafe_allow_html=True)
-                
+                # --- AI GENERATION ---
                 _, shop_note = get_trip_context(arrival_date, depart_date, shopping, luggage_counts)
                 payload = { "duration": dur, "purpose": purpose, "formal_count": formal_count, "luggage_counts": luggage_counts, "shopping_note": shop_note, "gender": "User", "walking": walking }
                 
