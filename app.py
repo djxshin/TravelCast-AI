@@ -105,6 +105,7 @@ def generate_smart_packing_list(city, weather_json, profile_data):
     1. {profile_data['shopping_note']}
     2. BREVITY: Keep item descriptions under 10 words. Functional only.
     3. DAILY PLANNER: This must be SHORT and punchy. Maximum 15 words per time block.
+    4. PRO TIP: You MUST include the '### 💡 Pro Tip' section at the end with a specific strategy.
     
     OUTPUT FORMAT (Strict Markdown):
     ### 🌤️ Daily Planner
@@ -120,12 +121,16 @@ def generate_smart_packing_list(city, weather_json, profile_data):
     | Category | Item | Qty | Notes |
     | :--- | :--- | :--- | :--- |
     | Tops | ... | ... | ... |
+    
+    ### 💡 Pro Tip
+    [Write a detailed, high-value strategic tip here.]
     """
+    # FIX: Switched to 'gemini-1.5-flash' for better stability
     response = client.models.generate_content(model="gemini-flash-latest", contents=prompt)
     return response.text
 
 # 5. UI Setup
-st.set_page_config(page_title="TravelCast AI v5.9", page_icon="🧳", layout="wide") 
+st.set_page_config(page_title="TravelCast AI v5.10", page_icon="🧳", layout="wide") 
 
 # --- CRITICAL CSS FIX FOR MOBILE WHITESPACE ---
 st.markdown("""
@@ -238,21 +243,24 @@ if st.button("Generate Optimized List", type="primary"):
                     </div>"""
                 weather_html += "</div>"
                 
-                # RENDER WITH HTML ALLOWED
+                # RENDER WITH HTML ALLOWED (Correctly fixed)
                 st.markdown(weather_html, unsafe_allow_html=True)
                 
                 _, shop_note = get_trip_context(arrival_date, depart_date, shopping, luggage_counts)
                 payload = { "duration": dur, "purpose": purpose, "formal_count": formal_count, "luggage_counts": luggage_counts, "shopping_note": shop_note, "gender": "User", "walking": walking }
                 
-                res = generate_smart_packing_list(city, weather_data, payload)
-                
-                if "### 💡 Pro Tip" in res:
-                    main, tip = res.split("### 💡 Pro Tip")
-                    st.markdown(main)
-                    st.divider()
-                    with st.expander("💡 **Insider Pro Tip**"):
-                        st.markdown(tip)
-                else:
-                    st.markdown(res)
+                try:
+                    res = generate_smart_packing_list(city, weather_data, payload)
+                    
+                    if "### 💡 Pro Tip" in res:
+                        main, tip = res.split("### 💡 Pro Tip")
+                        st.markdown(main)
+                        st.divider()
+                        with st.expander("💡 **Insider Pro Tip**"):
+                            st.markdown(tip)
+                    else:
+                        st.markdown(res)
+                except Exception as e:
+                    st.error(f"AI Connection Error: {str(e)}. Please try again.")
             else:
                 st.error("City not found.")
