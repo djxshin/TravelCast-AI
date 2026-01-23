@@ -126,7 +126,7 @@ def generate_smart_packing_list(city, weather_json, profile_data):
     [Write a detailed, strategic tip here.]
     """
     
-    response = client.models.generate_content(model="gemini-flash-latest", contents=prompt)
+    response = client.models.generate_content(model="gemini-2.0-flash", contents=prompt)
     return response.text
 
 # 5. UI Setup
