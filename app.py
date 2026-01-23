@@ -126,26 +126,19 @@ def generate_smart_packing_list(city, weather_json, profile_data):
     [Write a detailed, strategic tip here.]
     """
     
-    response = client.models.generate_content(model="gemini-flash-latest", contents=prompt)
+    response = client.models.generate_content(model="gemini-exp-1206", contents=prompt)
     return response.text
 
 # 5. UI Setup
-st.set_page_config(page_title="TravelCast v6.2", page_icon="🧳", layout="wide") 
+st.set_page_config(page_title="TravelCast v6.1", page_icon="🧳", layout="wide") 
 
-# --- CSS: FORCE MOBILE LAYOUT & FIX PADDING REGRESSION ---
+# --- CSS: FORCE MOBILE LAYOUT ---
 st.markdown("""
 <style>
-/* 1. Compact spacing for mobile */
 .block-container {
     padding-top: 2rem !important;
     padding-bottom: 5rem !important;
 }
-/* 2. CRITICAL FIX: Stabilize mobile viewport height to prevent white space */
-div[data-testid="stAppViewContainer"] {
-    min-height: 100vh;
-    overflow-x: hidden;
-}
-/* 3. Horizontal scroll style for weather */
 .weather-scroll-container {
     display: flex;
     overflow-x: auto;
