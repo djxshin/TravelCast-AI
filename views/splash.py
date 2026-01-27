@@ -2,6 +2,7 @@ import streamlit as st
 import base64
 import os
 
+#
 def get_base64(bin_file):
     try:
         with open(bin_file, 'rb') as f:
@@ -10,13 +11,12 @@ def get_base64(bin_file):
     except Exception as e:
         return None
 
+#
 def show_splash():
     # --- 1. ROBUST IMAGE FINDER ---
-    # Get the absolute path to the 'travelcast-ai' root folder
-    current_dir = os.path.dirname(os.path.abspath(__file__)) # This is .../views
-    root_dir = os.path.dirname(current_dir)                  # This is .../travelcast-ai
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    root_dir = os.path.dirname(current_dir)
     
-    # Check specifically for 'splashpage.jpg' based on your screenshot
     possible_paths = [
         os.path.join(root_dir, "splashpage.jpg"),
         os.path.join(current_dir, "splashpage.jpg"),
@@ -29,23 +29,21 @@ def show_splash():
             img_path = p
             break
 
-    # --- 2. CSS: Full Screen & Button Positioning ---
     if img_path:
         bin_str = get_base64(img_path)
-        # Note: Changed to image/jpeg to match your file extension
         bg_css = f'background-image: url("data:image/jpeg;base64,{bin_str}");'
     else:
-        # Fallback if image is somehow still missing
         bg_css = 'background-color: #1e1e1e;'
         st.error(f"Debug: Could not find 'splashpage.jpg' in {root_dir}")
 
+    # --- 2. CSS: Background & Button Positioning ---
     st.markdown(f"""
     <style>
     /* FORCE FULL SCREEN BACKGROUND */
     .stApp {{
         {bg_css}
-        background-size: cover;
-        background-position: center;
+        background-size: cover; /* Keeps the image filling the screen */
+        background-position: bottom center; /* Prioritizes the bottom of the image */
         background-repeat: no-repeat;
         background-attachment: fixed;
     }}
@@ -54,31 +52,30 @@ def show_splash():
     header, footer {{ display: none !important; }}
     
     /* PUSH CONTENT TO BOTTOM */
-    /* Adjusted padding to align with the buttons in your image */
+    /* REDUCED padding to move buttons up slightly. Adjust this value if needed. */
     .block-container {{
-        padding-top: 78vh !important; 
+        padding-top: 70vh !important; 
         padding-bottom: 5vh !important;
     }}
 
-    /* CUSTOMIZE BUTTONS TO MATCH IMAGE AESTHETIC */
+    /* DEBUGGING: MAKE BUTTONS VISIBLE */
     div[data-testid="stButton"] > button {{
-        background-color: rgba(60, 40, 30, 0.01); /* Invisible click area */
-        color: transparent; /* Hide text so we see the image buttons */
-        border: none;
+        background-color: rgba(255, 0, 0, 0.4); /* Semi-transparent RED for debugging */
+        color: white; /* Show text */
+        border: 2px solid red; /* Red border */
         height: 60px;
         width: 100%;
         cursor: pointer;
+        font-weight: bold;
     }}
     
     div[data-testid="stButton"] > button:hover {{
-        background-color: rgba(255, 255, 255, 0.1); /* Subtle hover effect */
-        border: 1px solid rgba(255,255,255,0.3);
-        border-radius: 12px;
+        background-color: rgba(255, 0, 0, 0.6);
     }}
     </style>
     """, unsafe_allow_html=True)
 
-    # --- 3. The Buttons (Invisible Overlays) ---
+    # --- 3. The Buttons ---
     c1, c2, c3 = st.columns([1, 1, 1.2])
     
     with c1: 
