@@ -227,7 +227,7 @@ if st.button("Generate Optimized List", type="primary"):
                 # --- HORIZONTAL SCROLL (CUSTOM HTML) ---
                 daily = weather_data['daily']
                 
-                # FIX: Build string as ONE LINE to avoid indentation/code-block issues
+                # FIX: Build string as ONE LINE to avoid indentation/code-block rendering
                 cards_html = ""
                 for i in range(min(7, len(daily['time']))):
                     day = datetime.strptime(daily['time'][i], "%Y-%m-%d").strftime("%b %d")
@@ -235,13 +235,7 @@ if st.button("Generate Optimized List", type="primary"):
                     high = round(daily['temperature_2m_max'][i])
                     low = round(daily['temperature_2m_min'][i])
                     
-                    cards_html += f"""
-                    <div style="min-width: 85px; text-align: center; border: 1px solid #444; border-radius: 10px; padding: 10px; background-color: rgba(255,255,255,0.05);">
-                        <div style="font-weight: bold; font-size: 14px; margin-bottom: 5px;">{day}</div>
-                        <div style="font-size: 28px; margin-bottom: 5px;">{emoji}</div>
-                        <div style="font-size: 12px; opacity: 0.8;">{high}° / {low}°</div>
-                    </div>
-                    """
+                    cards_html += f'<div style="min-width: 85px; text-align: center; border: 1px solid #444; border-radius: 10px; padding: 10px; background-color: rgba(255,255,255,0.05);"><div style="font-weight: bold; font-size: 14px; margin-bottom: 5px;">{day}</div><div style="font-size: 28px; margin-bottom: 5px;">{emoji}</div><div style="font-size: 12px; opacity: 0.8;">{high}° / {low}°</div></div>'
                 
                 # FINAL ASSEMBLY: No indentation at the start!
                 final_html = f'<div class="weather-scroll-container">{cards_html}</div>'
