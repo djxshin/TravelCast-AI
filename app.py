@@ -15,3 +15,5 @@ if st.session_state['page'] == 'splash':
 
 elif st.session_state['page'] == 'main':
     show_luggage_page()
+
+    # FORCE UPDATE: 2.1
