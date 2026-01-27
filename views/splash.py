@@ -11,21 +11,15 @@ def get_base64(bin_file):
         return None
 
 def show_splash():
-    # --- VISUAL CHECK ---
-    # If you don't see this text, the server code IS NOT UPDATED.
-    st.markdown("<h3 style='text-align: center; color: white; position: absolute; top: 10px; width: 100%; z-index: 999;'>VERSION 2.0 - CLEAN LAYOUT</h3>", unsafe_allow_html=True)
-
     # --- PATH FINDER ---
-    # Try finding the file in the current working directory (Root) first
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    root_dir = os.path.dirname(current_dir)
     img_filename = "splash_bg_clean.jpg"
     
-    # Check 1: Root Folder
+    # Check Root then Relative
     if os.path.exists(img_filename):
         img_path = img_filename
     else:
-        # Check 2: Relative to this script
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        root_dir = os.path.dirname(current_dir)
         img_path = os.path.join(root_dir, img_filename)
 
     # --- IMAGE LOADER ---
@@ -33,57 +27,60 @@ def show_splash():
         bin_str = get_base64(img_path)
         bg_css = f'background-image: url("data:image/jpeg;base64,{bin_str}");'
     else:
-        # CRITICAL FAIL: Show red screen if image is missing from server
-        bg_css = 'background-color: #880000;'
-        st.error(f"❌ CRITICAL: '{img_filename}' NOT FOUND on server. Please run: git add {img_filename}")
-        st.stop()
+        bg_css = 'background-color: #1e1e1e;' # Dark fallback if missing
 
-    # --- CSS ---
+    # --- CSS CONFIGURATION ---
     st.markdown(f"""
     <style>
+    /* MAIN BACKGROUND */
     .stApp {{
         {bg_css}
-        background-size: cover;
-        background-position: center bottom;
+        background-size: contain; /* CRITICAL FIX: Ensures entire image fits */
+        background-position: center center; /* Center the image */
         background-repeat: no-repeat;
         background-attachment: fixed;
+        background-color: #0e0e0e; /* Matches the dark photo edges */
     }}
     
+    /* HIDE DEFAULT ELEMENTS */
     header, footer {{ display: none !important; }}
     
-    /* PUSH CONTENT TO BOTTOM */
+    /* CONTENT CONTAINER - Pushes buttons to bottom */
     .block-container {{
-        height: 90vh !important;
+        height: 95vh !important;
         display: flex;
         flex-direction: column;
-        justify-content: flex-end;
-        padding-bottom: 3rem !important;
+        justify-content: flex-end; /* Align content to the bottom */
+        padding-bottom: 5vh !important; /* Space from bottom edge */
+        max-width: 900px; /* Prevent buttons from getting too wide on huge screens */
     }}
 
-    /* NEW BUTTON STYLE */
+    /* BUTTON STYLING */
     div[data-testid="stButton"] > button {{
-        background-color: rgba(255, 255, 255, 0.15);
-        backdrop-filter: blur(10px);
-        -webkit-backdrop-filter: blur(10px);
-        border: 1px solid rgba(255, 255, 255, 0.3);
+        background-color: rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        border: 1px solid rgba(255, 255, 255, 0.2);
         color: white;
-        border-radius: 30px;
+        border-radius: 12px;
         padding: 15px 0px;
-        font-size: 18px;
-        font-weight: 600;
+        font-size: 16px;
+        font-weight: 500;
         width: 100%;
+        transition: all 0.2s ease-in-out;
     }}
     
     div[data-testid="stButton"] > button:hover {{
-        background-color: rgba(255, 255, 255, 0.3);
-        transform: scale(1.02);
+        background-color: rgba(255, 255, 255, 0.25);
         border-color: white;
+        transform: scale(1.02);
     }}
     </style>
     """, unsafe_allow_html=True)
 
-    # --- BUTTONS ---
-    c1, c2, c3 = st.columns([1, 1, 1.2])
+    # --- BUTTON LAYOUT ---
+    # Centered columns with Guest Mode slightly larger
+    c1, c2, c3 = st.columns([1, 1, 1.5])
     
     with c1: 
         st.button("Log In", use_container_width=True)
@@ -92,6 +89,7 @@ def show_splash():
         st.button("Sign Up", use_container_width=True)
             
     with c3:
+        # The Primary Action
         if st.button("Guest Mode ✈️", type="primary", use_container_width=True):
             st.session_state['page'] = 'main'
             st.rerun()
