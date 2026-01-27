@@ -11,94 +11,77 @@ def get_base64(bin_file):
         return None
 
 def show_splash():
-    # --- 1. ROBUST IMAGE FINDER (Targeting the NEW clean image) ---
+    # --- 1. PATH SETUP ---
+    # We are in /views, we need to go up one level to root
     current_dir = os.path.dirname(os.path.abspath(__file__))
     root_dir = os.path.dirname(current_dir)
     
-    # Look for the new clean image name specifically
-    possible_paths = [
-        os.path.join(root_dir, "splash_bg_clean.jpg"),
-        os.path.join(current_dir, "splash_bg_clean.jpg"),
-        "splash_bg_clean.jpg"
-    ]
+    # HARD CODED: ONLY look for the clean image
+    img_path = os.path.join(root_dir, "splash_bg_clean.jpg")
+
+    # --- 2. DEBUG & LOAD ---
+    if not os.path.exists(img_path):
+        st.error(f"CRITICAL ERROR: Could not find image at: {img_path}")
+        st.stop()
     
-    img_path = None
-    for p in possible_paths:
-        if os.path.exists(p):
-            img_path = p
-            break
+    bin_str = get_base64(img_path)
+    bg_css = f'background-image: url("data:image/jpeg;base64,{bin_str}");'
 
-    if img_path:
-        bin_str = get_base64(img_path)
-        bg_css = f'background-image: url("data:image/jpeg;base64,{bin_str}");'
-    else:
-        bg_css = 'background-color: #1e1e1e;'
-        st.error(f"Debug: Could not find 'splash_bg_clean.jpg' in {root_dir}")
-
-    # --- 2. NEW CSS: Clean Layout & Modern Buttons ---
+    # --- 3. CSS ---
     st.markdown(f"""
     <style>
-    /* FORCE FULL SCREEN BACKGROUND */
     .stApp {{
         {bg_css}
-        background-size: cover; /* Fill screen */
-        background-position: center bottom; /* Anchor to bottom so suitcase is visible */
+        background-size: cover;
+        background-position: center bottom; /* Anchors image to bottom */
         background-repeat: no-repeat;
         background-attachment: fixed;
     }}
     
-    /* HIDE HEADER/FOOTER */
     header, footer {{ display: none !important; }}
     
-    /* LAYOUT CONTAINER - Pushes content to bottom */
+    /* PUSH CONTENT TO BOTTOM */
     .block-container {{
-        height: 95vh !important;
+        height: 90vh !important;
         display: flex;
         flex-direction: column;
-        justify-content: flex-end; /* Align items to bottom */
-        padding-bottom: 5rem !important; /* Space from bottom edge */
+        justify-content: flex-end;
+        padding-bottom: 3rem !important;
     }}
 
-    /* STYLE THE REAL STREAMLIT BUTTONS (Frosted Glass Look) */
+    /* FROSTED GLASS BUTTONS */
     div[data-testid="stButton"] > button {{
-        background-color: rgba(255, 255, 255, 0.15); /* Semi-transparent white */
-        backdrop-filter: blur(10px); /* Frosted glass effect */
-        -webkit-backdrop-filter: blur(10px); /* Safari support */
+        background-color: rgba(255, 255, 255, 0.15);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
         border: 1px solid rgba(255, 255, 255, 0.3);
         color: white;
-        border-radius: 30px; /* Nice rounded corners */
+        border-radius: 30px;
         padding: 15px 25px;
         font-size: 18px;
         font-weight: 600;
-        letter-spacing: 1px;
-        cursor: pointer;
-        transition: all 0.3s ease;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         width: 100%;
+        transition: transform 0.2s;
     }}
     
-    /* HOVER EFFECT */
     div[data-testid="stButton"] > button:hover {{
         background-color: rgba(255, 255, 255, 0.25);
+        transform: scale(1.02);
         border-color: white;
-        transform: translateY(-3px); /* Slight lift */
-        box-shadow: 0 7px 14px rgba(0,0,0,0.15);
     }}
     </style>
     """, unsafe_allow_html=True)
 
-    # --- 3. The Buttons Layout ---
-    # Use columns to spread them nicely at the bottom
+    # --- 4. BUTTONS ---
     c1, c2, c3 = st.columns([1, 1, 1.2])
     
     with c1: 
-        st.button("Log In", key="btn_login", use_container_width=True)
+        st.button("Log In", use_container_width=True)
             
     with c2: 
-        st.button("Sign Up", key="btn_signup", use_container_width=True)
+        st.button("Sign Up", use_container_width=True)
             
     with c3:
-        # PRIMARY ACTION
-        if st.button("Guest Mode ✈️", key="btn_guest", use_container_width=True):
+        if st.button("Guest Mode ✈️", type="primary", use_container_width=True):
             st.session_state['page'] = 'main'
             st.rerun()
