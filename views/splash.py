@@ -11,29 +11,40 @@ def get_base64(bin_file):
         return None
 
 def show_splash():
-    # --- 1. PATH SETUP ---
-    # We are in /views, we need to go up one level to root
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    root_dir = os.path.dirname(current_dir)
-    
-    # HARD CODED: ONLY look for the clean image
-    img_path = os.path.join(root_dir, "splash_bg_clean.jpg")
+    # --- VISUAL CHECK ---
+    # If you don't see this text, the server code IS NOT UPDATED.
+    st.markdown("<h3 style='text-align: center; color: white; position: absolute; top: 10px; width: 100%; z-index: 999;'>VERSION 2.0 - CLEAN LAYOUT</h3>", unsafe_allow_html=True)
 
-    # --- 2. DEBUG & LOAD ---
-    if not os.path.exists(img_path):
-        st.error(f"CRITICAL ERROR: Could not find image at: {img_path}")
+    # --- PATH FINDER ---
+    # Try finding the file in the current working directory (Root) first
+    img_filename = "splash_bg_clean.jpg"
+    
+    # Check 1: Root Folder
+    if os.path.exists(img_filename):
+        img_path = img_filename
+    else:
+        # Check 2: Relative to this script
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        root_dir = os.path.dirname(current_dir)
+        img_path = os.path.join(root_dir, img_filename)
+
+    # --- IMAGE LOADER ---
+    if os.path.exists(img_path):
+        bin_str = get_base64(img_path)
+        bg_css = f'background-image: url("data:image/jpeg;base64,{bin_str}");'
+    else:
+        # CRITICAL FAIL: Show red screen if image is missing from server
+        bg_css = 'background-color: #880000;'
+        st.error(f"❌ CRITICAL: '{img_filename}' NOT FOUND on server. Please run: git add {img_filename}")
         st.stop()
-    
-    bin_str = get_base64(img_path)
-    bg_css = f'background-image: url("data:image/jpeg;base64,{bin_str}");'
 
-    # --- 3. CSS ---
+    # --- CSS ---
     st.markdown(f"""
     <style>
     .stApp {{
         {bg_css}
         background-size: cover;
-        background-position: center bottom; /* Anchors image to bottom */
+        background-position: center bottom;
         background-repeat: no-repeat;
         background-attachment: fixed;
     }}
@@ -49,7 +60,7 @@ def show_splash():
         padding-bottom: 3rem !important;
     }}
 
-    /* FROSTED GLASS BUTTONS */
+    /* NEW BUTTON STYLE */
     div[data-testid="stButton"] > button {{
         background-color: rgba(255, 255, 255, 0.15);
         backdrop-filter: blur(10px);
@@ -57,22 +68,21 @@ def show_splash():
         border: 1px solid rgba(255, 255, 255, 0.3);
         color: white;
         border-radius: 30px;
-        padding: 15px 25px;
+        padding: 15px 0px;
         font-size: 18px;
         font-weight: 600;
         width: 100%;
-        transition: transform 0.2s;
     }}
     
     div[data-testid="stButton"] > button:hover {{
-        background-color: rgba(255, 255, 255, 0.25);
+        background-color: rgba(255, 255, 255, 0.3);
         transform: scale(1.02);
         border-color: white;
     }}
     </style>
     """, unsafe_allow_html=True)
 
-    # --- 4. BUTTONS ---
+    # --- BUTTONS ---
     c1, c2, c3 = st.columns([1, 1, 1.2])
     
     with c1: 
