@@ -16,7 +16,6 @@ def show_splash():
     root_dir = os.path.dirname(current_dir)
     img_filename = "splash_bg_clean.jpg"
     
-    # Check Root then Relative
     if os.path.exists(img_filename):
         img_path = img_filename
     else:
@@ -25,6 +24,7 @@ def show_splash():
     # --- IMAGE LOADER ---
     if os.path.exists(img_path):
         bin_str = get_base64(img_path)
+        # Using specific position to center the 'contain'ed image
         bg_css = f'background-image: url("data:image/jpeg;base64,{bin_str}");'
     else:
         bg_css = 'background-color: #0e0e0e;'
@@ -35,36 +35,32 @@ def show_splash():
     /* MAIN BACKGROUND */
     .stApp {{
         {bg_css}
-        background-size: contain; /* CRITICAL FIX: Ensures entire image fits */
-        background-position: center center; /* Center the image */
+        background-size: contain; /* Keeps image full without cropping */
+        background-position: center center; /* Dead center */
         background-repeat: no-repeat;
         background-attachment: fixed;
-        background-color: #0e0e0e; /* Matches the dark photo edges */
+        background-color: #000000; /* Black borders to match */
     }}
     
     /* HIDE DEFAULT ELEMENTS */
     header, footer {{ display: none !important; }}
     
-    /* CONTENT CONTAINER - Pushes buttons to bottom */
+    /* RESET CONTAINER - Remove padding so spacer works accurately */
     .block-container {{
-        height: 100vh !important;
-        display: flex;
-        flex-direction: column;
-        justify-content: flex-end; /* Align content to the bottom */
-        padding-bottom: 5vh !important; /* Space from bottom edge */
-        max-width: 900px; /* Prevent buttons from getting too wide on huge screens */
-        margin: 0 auto; /* Center the container */
+        padding-top: 0px !important;
+        padding-bottom: 0px !important;
+        max-width: 100%;
     }}
 
     /* BUTTON STYLING */
     div[data-testid="stButton"] > button {{
         background-color: rgba(255, 255, 255, 0.1);
-        backdrop-filter: blur(8px);
-        -webkit-backdrop-filter: blur(8px);
+        backdrop-filter: blur(5px);
+        -webkit-backdrop-filter: blur(5px);
         border: 1px solid rgba(255, 255, 255, 0.2);
         color: white;
-        border-radius: 12px;
-        padding: 15px 0px;
+        border-radius: 8px;
+        height: 50px;
         font-size: 16px;
         font-weight: 500;
         width: 100%;
@@ -72,25 +68,36 @@ def show_splash():
     }}
     
     div[data-testid="stButton"] > button:hover {{
-        background-color: rgba(255, 255, 255, 0.25);
+        background-color: rgba(255, 255, 255, 0.2);
         border-color: white;
         transform: scale(1.02);
     }}
     </style>
     """, unsafe_allow_html=True)
 
-    # --- BUTTON LAYOUT ---
-    # Centered columns with Guest Mode slightly larger
-    c1, c2, c3 = st.columns([1, 1, 1.5])
+    # --- LAYOUT LOGIC ---
     
-    with c1: 
-        st.button("Log In", use_container_width=True)
-            
-    with c2: 
-        st.button("Sign Up", use_container_width=True)
-            
-    with c3:
-        # The Primary Action
-        if st.button("Guest Mode ✈️", type="primary", use_container_width=True):
-            st.session_state['page'] = 'main'
-            st.rerun()
+    # 1. VERTICAL SPACER
+    # This invisible block pushes everything else down by 78% of the viewport height.
+    # Adjust '78vh' if you want buttons higher or lower.
+    st.markdown('<div style="height: 78vh; width: 100%;"></div>', unsafe_allow_html=True)
+
+    # 2. CENTERED BUTTON ROW
+    # We use empty columns on the sides to squeeze the buttons into the middle
+    # matching the width of the image content usually.
+    _, main_col, _ = st.columns([1, 2, 1]) 
+    
+    with main_col:
+        # Nested columns for the 3 buttons
+        c1, c2, c3 = st.columns([1, 1, 1.2])
+        
+        with c1: 
+            st.button("Log In", use_container_width=True)
+                
+        with c2: 
+            st.button("Sign Up", use_container_width=True)
+                
+        with c3:
+            if st.button("Guest Mode ✈️", type="primary", use_container_width=True):
+                st.session_state['page'] = 'main'
+                st.rerun()
