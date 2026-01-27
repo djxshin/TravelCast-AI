@@ -27,7 +27,7 @@ def show_splash():
         bin_str = get_base64(img_path)
         bg_css = f'background-image: url("data:image/jpeg;base64,{bin_str}");'
     else:
-        bg_css = 'background-color: #1e1e1e;' # Dark fallback if missing
+        bg_css = 'background-color: #0e0e0e;'
 
     # --- CSS CONFIGURATION ---
     st.markdown(f"""
@@ -47,12 +47,13 @@ def show_splash():
     
     /* CONTENT CONTAINER - Pushes buttons to bottom */
     .block-container {{
-        height: 95vh !important;
+        height: 100vh !important;
         display: flex;
         flex-direction: column;
         justify-content: flex-end; /* Align content to the bottom */
         padding-bottom: 5vh !important; /* Space from bottom edge */
         max-width: 900px; /* Prevent buttons from getting too wide on huge screens */
+        margin: 0 auto; /* Center the container */
     }}
 
     /* BUTTON STYLING */
