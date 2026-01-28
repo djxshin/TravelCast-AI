@@ -1,170 +1,131 @@
 import streamlit as st
-from utils.weather import get_weather_data
+import os
+from google import genai
+from dotenv import load_dotenv
+from datetime import datetime
+
+# --- IMPORT THE NEW UTILS ---
+from utils.weather import get_weather_emoji, search_city_options, get_weather_data
+from utils.logic import calculate_capacity_metrics, get_trip_context
 from utils.ai import generate_smart_packing_list
-from utils.logic import get_packing_profile
 
+# --- MAIN PAGE VIEW ---
 def show_luggage_page():
-    st.markdown("## 🎒 Luggage & Logistics")
-    
-    # --- 1. USER INPUTS ---
-    col1, col2 = st.columns(2)
-    with col1:
-        trip_duration = st.slider("Trip Duration (Days)", 1, 30, 7)
-    with col2:
-        # Default capacity 100L (Medium Check-in)
-        total_capacity = st.number_input("Total Luggage Capacity (Liters)", value=100, step=10)
+    load_dotenv()
+    api_key = os.getenv("GOOGLE_API_KEY")
+    client = genai.Client(api_key=api_key) if api_key else None
 
-    # --- 2. GET CONTEXT (Weather & Profile) ---
-    city = st.session_state.get('city', 'Unknown')
-    weather_data = st.session_state.get('weather_data', None)
-    
-    # Defaults if data is missing
-    avg_temp = 20
-    weather_desc = "Moderate"
-    
-    if weather_data and 'current' in weather_data:
-        avg_temp = weather_data['current'].get('temp_c', 20)
-        weather_desc = weather_data['current'].get('condition', {}).get('text', 'Clear')
-
-    # --- 3. SMART SPACE CALCULATION ---
-    # Determine if it's a "Cold" or "Warm" trip
-    is_cold = avg_temp < 15  # Threshold: 15°C (59°F)
-    
-    # Base Usage: Clothes typically take ~40% of a bag
-    base_usage = 0.40 
-    
-    if is_cold:
-        # --- COLD WEATHER LOGIC ---
-        # Penalty: Winter clothes are bulky (+20% usage)
-        weather_penalty = 0.20
-        # Bonus: User wears Coat & Boots on plane (Saves 15%)
-        wear_on_plane_bonus = 0.15 
-        
-        wearable_item = "Winter Coat & Boots"
-        
-        # Net Calculation
-        final_usage_ratio = base_usage + weather_penalty - wear_on_plane_bonus
-    else:
-        # --- WARM WEATHER LOGIC ---
-        # Penalty: None (Clothes are thin)
-        weather_penalty = 0.0
-        # Bonus: User wears Sneakers & Hoodie on plane (Saves 5%)
-        wear_on_plane_bonus = 0.05
-        
-        wearable_item = "Sneakers & Hoodie"
-        
-        # Net Calculation
-        final_usage_ratio = base_usage + weather_penalty - wear_on_plane_bonus
-
-    # Safety Cap: Ensure usage is realistic (between 30% and 90%)
-    final_usage_ratio = max(0.3, min(0.9, final_usage_ratio))
-    
-    # Calculate Liters
-    used_volume = total_capacity * final_usage_ratio
-    shopping_potential = total_capacity - used_volume
-
-    # --- 4. VISUALIZATION FUNCTION ---
-    def get_capacity_visualization(liters, is_cold_trip):
-        items = []
-        remaining = liters
-        
-        if is_cold_trip:
-            # WINTER SHOPPING (Big items take big space)
-            n_parkas = int(remaining // 15) # Assume Jacket is ~15L
-            if n_parkas > 0:
-                items.append(f"🧥 {n_parkas}x Jacket{'s' if n_parkas > 1 else ''}")
-                remaining -= (n_parkas * 15)
-                
-            n_boots = int(remaining // 10) # Assume Boots are ~10L
-            if n_boots > 0:
-                items.append(f"🥾 {n_boots}x Boot Pair{'s' if n_boots > 1 else ''}")
-        else:
-            # SUMMER SHOPPING (Small items)
-            n_sneakers = int(remaining // 8) # Assume Sneakers are ~8L
-            if n_sneakers > 0:
-                items.append(f"👟 {n_sneakers}x Kicks")
-                remaining -= (n_sneakers * 8)
-                
-            n_shirts = int(remaining) # Assume T-Shirt is ~1L
-            if n_shirts > 0:
-                items.append(f"👕 {n_shirts}x Tees")
-
-        if not items: 
-            return "Small souvenirs only!"
-        return "  +  ".join(items[:3])
-
-    # --- 5. RENDER THE UI ---
-    st.markdown("### ✅ Ready to Pack!")
-    
-    # Progress Bar representing Packed vs. Free space
-    st.progress(final_usage_ratio)
-    
-    # The "Visualizer" Card
-    visual_text = get_capacity_visualization(shopping_potential, is_cold)
-    
-    st.markdown(f"""
-    <div style="
-        background-color: #1a1a1a; 
-        border: 1px solid #333; 
-        border-radius: 12px; 
-        padding: 20px; 
-        margin-top: 15px; 
-        margin-bottom: 25px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
-        
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-            <h3 style="margin:0; color: #66bb6a;">🛍️ Available Space: {shopping_potential:.1f} L</h3>
-            <span style="background-color: #2e7d32; color: white; padding: 5px 10px; border-radius: 15px; font-size: 0.8em; font-weight: bold;">
-                ✈️ Smart Packer Bonus Active
-            </span>
-        </div>
-
-        <p style="color: #bbb; font-size: 0.9em; margin-bottom: 15px; border-left: 3px solid #4a90e2; padding-left: 10px;">
-            We calculated your space assuming you <b>wear your {wearable_item}</b> on the plane.
-            <br><i>(Comfort Tip: Use the 'Subway Peel' strategy—take the heavy layer off once seated!)</i>
-        </p>
-
-        <div style="background-color: #252525; padding: 10px; border-radius: 8px;">
-            <p style="margin:0; color: #fff; font-size: 1.1em;">
-                Room left for: <b style="color: #ffd700;">{visual_text}</b>
-            </p>
-        </div>
-    </div>
+    st.markdown("""
+        <style>
+        .weather-scroll-container {
+            display: flex;
+            overflow-x: auto;
+            gap: 12px;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+        }
+        </style>
     """, unsafe_allow_html=True)
 
-    # --- 6. WARNINGS ---
-    if total_capacity > 23000: # Rough check for impossible inputs (optional logic)
-        st.warning("⚠️ That's a huge bag! Ensure it meets airline size limits.")
-    
-    # Check bag weight warning
-    st.warning("⚠️ Checked Bag Warning: Watch your weight limit (50lb/23kg).")
+    st.title("🧳 Luggage Optimizer")
+    st.caption("TravelCast AI")
 
-    # --- 7. GENERATE BUTTON ---
-    if st.button("Generate Optimized List", type="primary", use_container_width=True):
-        with st.spinner("🤖 AI is curating your wardrobe..."):
-            
-            # 1. Gather Profile
-            profile = get_packing_profile(
-                duration=trip_duration,
-                is_business=False, # Could add toggle later
-                gender="Neutral",  # Could add toggle later
-                style_preference="Standard"
-            )
-            
-            # 2. Add Shopping Context to Profile so AI knows
-            profile['shopping_context'] = f"User has {shopping_potential:.1f}L space for shopping. Suggest items like {visual_text}."
-            
-            # 3. Call AI
-            # Note: client is passed from app.py usually, or initialized here if needed.
-            # Assuming 'client' is in session_state or we handle it in utils.ai
-            if 'genai_client' in st.session_state:
-                result = generate_smart_packing_list(city, weather_data, profile, st.session_state['genai_client'])
-                st.session_state['packing_list'] = result
-                st.rerun()
+    col1, col2 = st.columns(2)
+    with col1:
+        st.subheader("1. Trip Details")
+        search_query = st.text_input("Destination", placeholder="Type city (e.g. Paris)")
+        selected_location_data = None
+        
+        if search_query:
+            options = search_city_options(search_query)
+            if options:
+                labels = [opt["label"] for opt in options]
+                choice = st.selectbox("📍 Confirm Location", labels)
+                for opt in options:
+                    if opt["label"] == choice:
+                        selected_location_data = opt
+                        break
             else:
-                st.error("AI Client not initialized. Please return to Home.")
+                st.warning("City not found. Try adding the country code.")
 
-    # --- 8. DISPLAY RESULTS ---
-    if 'packing_list' in st.session_state:
-        st.markdown("---")
-        st.markdown(st.session_state['packing_list'])
+        arrival_date = st.date_input("Arrival")
+        depart_date = st.date_input("Departure")
+        purpose = st.multiselect("Purpose", ["Business", "Vacation", "Adventure", "Romantic"])
+    
+    with col2:
+        st.subheader("2. Luggage & Load")
+        c1, c2, c3 = st.columns(3)
+        with c1: backpacks = st.number_input("Backpacks (20L)", 0, 3, 1)
+        with c2: carry_ons = st.number_input("Carry-ons (40L)", 0, 3, 0)
+        with c3: checked = st.number_input("Checked (100L)", 0, 3, 0)
+        shopping = st.select_slider("Shopping Intent", ["None", "Light", "Medium", "Heavy"])
+        is_formal = st.checkbox("Formal Events?")
+        formal_count = st.number_input("Count", 1, 10, 1) if is_formal else 0
+        walking = st.select_slider("Walking", ["Low", "Medium", "High"])
+
+    luggage_counts = {"backpack": backpacks, "carry_on": carry_ons, "checked": checked}
+    if arrival_date and depart_date:
+        dur = max(1, (depart_date - arrival_date).days + 1)
+        weather_preview = None
+        avg_temp = None
+        if selected_location_data:
+            weather_preview = get_weather_data(selected_location_data['lat'], selected_location_data['long'])
+            if weather_preview and 'current' in weather_preview:
+                avg_temp = weather_preview['current']['temperature_2m']
+        
+        metrics = calculate_capacity_metrics(luggage_counts, dur, shopping, formal_count, walking, avg_temp)
+        
+        if not metrics['is_overpacked']:
+            st.divider()
+            pct_used = (metrics['used_L'] / metrics['total_L']) * 100
+            pct_reserved = (metrics['reserved_L'] / metrics['total_L']) * 100
+            pct_free = 100 - pct_used - pct_reserved
+            total_potential = round((metrics['total_L'] - metrics['used_L']) + metrics['reserved_L'], 1)
+            
+            st.markdown("### ✅ Ready to Pack!")
+            bar_html = f'<div style="display: flex; width: 100%; height: 30px; border-radius: 5px; overflow: hidden; margin-bottom: 10px; border: 1px solid #555;"><div style="width: {pct_used}%; background-color: #7f8c8d;"></div><div style="width: {pct_reserved}%; background-color: #9b59b6;"></div><div style="width: {pct_free}%; background-color: #2ecc71;"></div></div>'
+            st.markdown(bar_html, unsafe_allow_html=True)
+            st.markdown(f"**🛍️ Total Shopping Potential: {total_potential} Liters**")
+            if total_potential > 60:
+                 st.warning("⚠️ **Checked Bag Warning:** Watch your weight limit (50lb/23kg).")
+
+    if st.button("Generate Optimized List", type="primary"):
+        if not selected_location_data or not api_key:
+            st.error("Please select a valid location from the dropdown and check your API Key.")
+        else:
+            with st.spinner("Analyzing weather satellites..."):
+                weather_data = weather_preview
+                if weather_data and "daily" in weather_data:
+                    st.divider()
+                    st.subheader(f"🌤️ Weather: {selected_location_data['label']}")
+                    daily = weather_data['daily']
+                    cards_html = ""
+                    for i in range(min(7, len(daily['time']))):
+                        day = datetime.strptime(daily['time'][i], "%Y-%m-%d").strftime("%b %d")
+                        emoji = get_weather_emoji(daily['weather_code'][i])
+                        high = round(daily['temperature_2m_max'][i])
+                        low = round(daily['temperature_2m_min'][i])
+                        cards_html += f'<div style="min-width: 85px; text-align: center; border: 1px solid #444; border-radius: 10px; padding: 10px; background-color: rgba(255,255,255,0.05);"><div style="font-weight: bold; font-size: 14px; margin-bottom: 5px;">{day}</div><div style="font-size: 28px; margin-bottom: 5px;">{emoji}</div><div style="font-size: 12px; opacity: 0.8;">{high}° / {low}°</div></div>'
+                    final_html = f'<div class="weather-scroll-container">{cards_html}</div>'
+                    st.markdown(final_html, unsafe_allow_html=True)
+
+                _, shop_note = get_trip_context(arrival_date, depart_date, shopping, luggage_counts)
+                payload = { 
+                    "duration": dur, "purpose": purpose, "formal_count": formal_count, 
+                    "luggage_counts": luggage_counts, "shopping_note": shop_note, 
+                    "gender": "User", "walking": walking 
+                }
+                try:
+                    res = generate_smart_packing_list(selected_location_data['label'], weather_data, payload, client)
+                    if "### 💡 Pro Tip" in res:
+                        main, tip = res.split("### 💡 Pro Tip")
+                        st.markdown(main)
+                        st.divider()
+                        with st.expander("💡 **Insider Pro Tip**"):
+                            st.markdown(tip)
+                    else:
+                        st.markdown(res)
+                except Exception as e:
+                    st.error(f"Error: {str(e)}")
