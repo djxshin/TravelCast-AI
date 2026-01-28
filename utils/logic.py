@@ -1,3 +1,6 @@
+# utils/logic.py
+
+# --- EXISTING LOGIC (KEPT SAFE) ---
 def calculate_capacity_metrics(luggage_counts, duration, shopping_intent, formal_count, walking_level, avg_temp=None):
     CAPACITY_MAP = { "backpack": 20, "carry_on": 40, "checked": 100 }
     total_capacity = (luggage_counts['backpack'] * CAPACITY_MAP['backpack']) + \
@@ -40,3 +43,24 @@ def get_trip_context(arrival, depart, shopping_intent, luggage_counts):
         elif luggage_counts['carry_on'] > 0: shopping_note = "CRITICAL: Heavy shopping with Carry-on. Reduce clothing by 30%."
         else: shopping_note = "CRITICAL: Heavy shopping with Backpack. Minimalist capsule wardrobe only."
     return duration, shopping_note
+
+# --- NEW FUNCTION (ADDED TO FIX IMPORT ERROR) ---
+def get_packing_profile(duration, is_business, gender, style_preference):
+    """
+    Generates a structured dictionary for the AI.
+    """
+    profile = {
+        "trip_duration_days": duration,
+        "is_business_trip": is_business,
+        "user_gender": gender,
+        "style_preference": style_preference,
+        "formal_count": 0, 
+        "shopping_note": "Ensure space is left for shopping."
+    }
+    
+    if duration > 7:
+        profile['laundry_note'] = "Trip exceeds 7 days. Suggest laundry logic."
+    if is_business:
+        profile['formal_count'] = 2 
+        
+    return profile
