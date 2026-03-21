@@ -1,6 +1,7 @@
 import requests
 import streamlit as st
 from datetime import datetime, timedelta
+from collections import Counter
 
 def get_weather_emoji(code):
     if code == 0: return "☀️"
@@ -85,11 +86,16 @@ def get_weather_data(lat, long, arrival_date_str=None, trip_duration=7):
             avg_max_temps, avg_min_temps, avg_codes = [], [], []
             
             for day_idx in range(num_days):
+                # 1. Safely average the temperatures
                 day_max = sum(year[day_idx] for year in all_max_temps) / len(all_max_temps)
                 day_min = sum(year[day_idx] for year in all_min_temps) / len(all_min_temps)
                 avg_max_temps.append(round(day_max, 1))
                 avg_min_temps.append(round(day_min, 1))
-                avg_codes.append(primary_weather_codes[0][day_idx])
+                
+                # 2. THE FIX: Find the most common weather icon across the 3 years
+                codes_for_this_day = [year[day_idx] for year in primary_weather_codes]
+                most_common_code = Counter(codes_for_this_day).most_common(1)[0][0]
+                avg_codes.append(most_common_code)
 
             mock_data = {
                 "forecast_type": "3-Year Climate Average",
