@@ -110,7 +110,7 @@ def show_luggage_page():
                     
                     daily = weather_preview['daily']
                     cards_html = ""
-                    for i in range(min(7, len(daily['time']))):
+                    for i in range(len(daily['time'])):
                         day = datetime.strptime(daily['time'][i], "%Y-%m-%d").strftime("%b %d")
                         emoji = get_weather_emoji(daily['weather_code'][i])
                         high = round(daily['temperature_2m_max'][i])
