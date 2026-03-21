@@ -4,12 +4,10 @@ from google import genai
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
 
-# --- IMPORT THE NEW UTILS ---
 from utils.weather import get_weather_emoji, search_city_options, get_weather_data
 from utils.logic import calculate_capacity_metrics, get_trip_context
 from utils.ai import generate_smart_packing_list
 
-# --- MAIN PAGE VIEW ---
 def show_luggage_page():
     load_dotenv()
     api_key = os.getenv("GOOGLE_API_KEY")
@@ -35,7 +33,6 @@ def show_luggage_page():
     col1, col2 = st.columns(2)
     with col1:
         st.subheader("1. Trip Details")
-        
         search_query = st.text_input("Destination", placeholder="Type city (e.g. Paris)")
         selected_location_data = None
         
@@ -51,7 +48,6 @@ def show_luggage_page():
             else:
                 st.warning("City not found. Try adding the country code.")
 
-        # Locked Date Pickers
         today = datetime.now().date()
         arrival_date = st.date_input("Arrival", value=today + timedelta(days=1), min_value=today)
         depart_date = st.date_input("Departure", value=arrival_date + timedelta(days=7), min_value=arrival_date)
@@ -74,10 +70,9 @@ def show_luggage_page():
     if arrival_date and depart_date:
         dur = max(1, (depart_date - arrival_date).days + 1)
         weather_preview = None
-        avg_temp = 65 # CRITICAL FALLBACK: Ensures calculate_capacity_metrics never crashes the meter
+        avg_temp = 65 
         
         if selected_location_data:
-            # CRITICAL FIX: The dates are now officially being passed to the weather router
             weather_preview = get_weather_data(
                 selected_location_data['lat'], 
                 selected_location_data['long'],
@@ -110,8 +105,6 @@ def show_luggage_page():
             with st.spinner("Analyzing weather satellites..."):
                 if weather_preview and "daily" in weather_preview:
                     st.divider()
-                    
-                    # Added a tag to show you if it's using Live or Historical data
                     forecast_label = weather_preview.get('forecast_type', 'Forecast')
                     st.subheader(f"🌤️ Weather: {selected_location_data['label']} ({forecast_label})")
                     
