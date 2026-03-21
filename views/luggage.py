@@ -36,7 +36,6 @@ def show_luggage_page():
     with col1:
         st.subheader("1. Trip Details")
         
-        # Keeping your original native text input
         search_query = st.text_input("Destination", placeholder="Type city (e.g. Paris)")
         selected_location_data = None
         
@@ -52,16 +51,10 @@ def show_luggage_page():
             else:
                 st.warning("City not found. Try adding the country code.")
 
-        # --- UPDATED: LOCKED DATE PICKERS ---
-        # 1. Get today's exact date
+        # Locked Date Pickers
         today = datetime.now().date()
-        
-        # 2. Arrival: Set default to tomorrow, block past dates
         arrival_date = st.date_input("Arrival", value=today + timedelta(days=1), min_value=today)
-        
-        # 3. Departure: Set default to 7 days later, block dates before arrival
         depart_date = st.date_input("Departure", value=arrival_date + timedelta(days=7), min_value=arrival_date)
-        # ------------------------------------
         
         purpose = st.multiselect("Purpose", ["Business", "Vacation", "Adventure", "Romantic"])
     
@@ -77,18 +70,26 @@ def show_luggage_page():
         walking = st.select_slider("Walking", ["Low", "Medium", "High"])
 
     luggage_counts = {"backpack": backpacks, "carry_on": carry_ons, "checked": checked}
+    
     if arrival_date and depart_date:
         dur = max(1, (depart_date - arrival_date).days + 1)
         weather_preview = None
-        avg_temp = None
+        avg_temp = 65 # CRITICAL FALLBACK: Ensures calculate_capacity_metrics never crashes the meter
+        
         if selected_location_data:
-            weather_preview = get_weather_data(selected_location_data['lat'], selected_location_data['long'])
+            # CRITICAL FIX: The dates are now officially being passed to the weather router
+            weather_preview = get_weather_data(
+                selected_location_data['lat'], 
+                selected_location_data['long'],
+                arrival_date_str=arrival_date.strftime("%Y-%m-%d"),
+                trip_duration=dur
+            )
             if weather_preview and 'current' in weather_preview:
                 avg_temp = weather_preview['current']['temperature_2m']
         
         metrics = calculate_capacity_metrics(luggage_counts, dur, shopping, formal_count, walking, avg_temp)
         
-        if not metrics['is_overpacked']:
+        if not metrics.get('is_overpacked', False):
             st.divider()
             pct_used = (metrics['used_L'] / metrics['total_L']) * 100
             pct_reserved = (metrics['reserved_L'] / metrics['total_L']) * 100
@@ -107,11 +108,14 @@ def show_luggage_page():
             st.error("Please select a valid location from the dropdown and check your API Key.")
         else:
             with st.spinner("Analyzing weather satellites..."):
-                weather_data = weather_preview
-                if weather_data and "daily" in weather_data:
+                if weather_preview and "daily" in weather_preview:
                     st.divider()
-                    st.subheader(f"🌤️ Weather: {selected_location_data['label']}")
-                    daily = weather_data['daily']
+                    
+                    # Added a tag to show you if it's using Live or Historical data
+                    forecast_label = weather_preview.get('forecast_type', 'Forecast')
+                    st.subheader(f"🌤️ Weather: {selected_location_data['label']} ({forecast_label})")
+                    
+                    daily = weather_preview['daily']
                     cards_html = ""
                     for i in range(min(7, len(daily['time']))):
                         day = datetime.strptime(daily['time'][i], "%Y-%m-%d").strftime("%b %d")
@@ -129,7 +133,7 @@ def show_luggage_page():
                     "gender": "User", "walking": walking 
                 }
                 try:
-                    res = generate_smart_packing_list(selected_location_data['label'], weather_data, payload, client)
+                    res = generate_smart_packing_list(selected_location_data['label'], weather_preview, payload, client)
                     if "### 💡 Pro Tip" in res:
                         main, tip = res.split("### 💡 Pro Tip")
                         st.markdown(main)
