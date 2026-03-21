@@ -91,10 +91,24 @@ def show_luggage_page():
             pct_free = 100 - pct_used - pct_reserved
             total_potential = round((metrics['total_L'] - metrics['used_L']) + metrics['reserved_L'], 1)
             
-            st.markdown("### ✅ Ready to Pack!")
-            bar_html = f'<div style="display: flex; width: 100%; height: 30px; border-radius: 5px; overflow: hidden; margin-bottom: 10px; border: 1px solid #555;"><div style="width: {pct_used}%; background-color: #7f8c8d;"></div><div style="width: {pct_reserved}%; background-color: #9b59b6;"></div><div style="width: {pct_free}%; background-color: #2ecc71;"></div></div>'
-            st.markdown(bar_html, unsafe_allow_html=True)
-            st.markdown(f"**🛍️ Total Shopping Potential: {total_potential} Liters**")
+            st.markdown("### 🧳 Luggage Capacity")
+            
+            # 1. The Meter
+            bar_html = f'<div style="display: flex; width: 100%; height: 30px; border-radius: 5px; overflow: hidden; margin-bottom: 8px; border: 1px solid #555;"><div style="width: {pct_used}%; background-color: #7f8c8d;"></div><div style="width: {pct_reserved}%; background-color: #9b59b6;"></div><div style="width: {pct_free}%; background-color: #2ecc71;"></div></div>'
+            
+            # 2. The New Clean Legend (Replaces the "Shopping Potential" text)
+            legend_html = f'''
+            <div style="display: flex; justify-content: space-between; font-size: 14px; color: #ddd; margin-bottom: 20px;">
+                <div style="display: flex; align-items: center;"><span style="display: inline-block; width: 12px; height: 12px; background-color: #7f8c8d; border-radius: 3px; margin-right: 5px;"></span> <b>Essentials ({int(pct_used)}%)</b></div>
+                <div style="display: flex; align-items: center;"><span style="display: inline-block; width: 12px; height: 12px; background-color: #9b59b6; border-radius: 3px; margin-right: 5px;"></span> <b>Reserved ({int(pct_reserved)}%)</b></div>
+                <div style="display: flex; align-items: center;"><span style="display: inline-block; width: 12px; height: 12px; background-color: #2ecc71; border-radius: 3px; margin-right: 5px;"></span> <b>Free Space ({int(pct_free)}%)</b></div>
+            </div>
+            '''
+            
+            # Render both the bar and the legend
+            st.markdown(bar_html + legend_html, unsafe_allow_html=True)
+            
+            # Keep the warning if they are packing a massive checked bag
             if total_potential > 60:
                  st.warning("⚠️ **Checked Bag Warning:** Watch your weight limit (50lb/23kg).")
 
