@@ -21,7 +21,7 @@ def generate_smart_packing_list(city_label, weather_json, profile_data, client):
     1. {profile_data.get('shopping_note', 'Standard packing')}
     2. BREVITY: Keep item descriptions under 10 words. Functional only.
     3. DAILY PLANNER: This must be SHORT and punchy. Maximum 15 words per time block.
-    4. PRO TIP: Provide specific advice on managing indoor/outdoor temperature transitions.
+    4. PRO TIP: Suggest a specific layering strategy for the destination's daily temperature shifts and indoor/outdoor transitions.
     5. {formal_instruction}
     
     OUTPUT FORMAT (Strict Markdown):
