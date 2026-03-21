@@ -2,7 +2,7 @@ import streamlit as st
 import os
 from google import genai
 from dotenv import load_dotenv
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # --- IMPORT THE NEW UTILS ---
 from utils.weather import get_weather_emoji, search_city_options, get_weather_data
@@ -35,6 +35,8 @@ def show_luggage_page():
     col1, col2 = st.columns(2)
     with col1:
         st.subheader("1. Trip Details")
+        
+        # Keeping your original native text input
         search_query = st.text_input("Destination", placeholder="Type city (e.g. Paris)")
         selected_location_data = None
         
@@ -50,8 +52,17 @@ def show_luggage_page():
             else:
                 st.warning("City not found. Try adding the country code.")
 
-        arrival_date = st.date_input("Arrival")
-        depart_date = st.date_input("Departure")
+        # --- UPDATED: LOCKED DATE PICKERS ---
+        # 1. Get today's exact date
+        today = datetime.now().date()
+        
+        # 2. Arrival: Set default to tomorrow, block past dates
+        arrival_date = st.date_input("Arrival", value=today + timedelta(days=1), min_value=today)
+        
+        # 3. Departure: Set default to 7 days later, block dates before arrival
+        depart_date = st.date_input("Departure", value=arrival_date + timedelta(days=7), min_value=arrival_date)
+        # ------------------------------------
+        
         purpose = st.multiselect("Purpose", ["Business", "Vacation", "Adventure", "Romantic"])
     
     with col2:
