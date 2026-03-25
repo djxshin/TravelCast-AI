@@ -93,10 +93,8 @@ def show_luggage_page():
             
             st.markdown("### 🧳 Luggage Capacity")
             
-            # 1. The Meter
             bar_html = f'<div style="display: flex; width: 100%; height: 30px; border-radius: 5px; overflow: hidden; margin-bottom: 8px; border: 1px solid #555;"><div style="width: {pct_used}%; background-color: #7f8c8d;"></div><div style="width: {pct_reserved}%; background-color: #9b59b6;"></div><div style="width: {pct_free}%; background-color: #2ecc71;"></div></div>'
             
-            # 2. The New Clean Legend (Replaces the "Shopping Potential" text)
             legend_html = f'''
             <div style="display: flex; justify-content: space-between; font-size: 14px; color: #ddd; margin-bottom: 20px;">
                 <div style="display: flex; align-items: center;"><span style="display: inline-block; width: 12px; height: 12px; background-color: #7f8c8d; border-radius: 3px; margin-right: 5px;"></span> <b>Essentials ({int(pct_used)}%)</b></div>
@@ -105,10 +103,8 @@ def show_luggage_page():
             </div>
             '''
             
-            # Render both the bar and the legend
             st.markdown(bar_html + legend_html, unsafe_allow_html=True)
             
-            # Keep the warning if they are packing a massive checked bag
             if total_potential > 60:
                  st.warning("⚠️ **Checked Bag Warning:** Watch your weight limit (50lb/23kg).")
 
@@ -125,10 +121,17 @@ def show_luggage_page():
                     daily = weather_preview['daily']
                     cards_html = ""
                     for i in range(len(daily['time'])):
+                        t_max = daily['temperature_2m_max'][i]
+                        t_min = daily['temperature_2m_min'][i]
+                        
+                        # --- THE FIX: Safety net for empty Open-Meteo days ---
+                        if t_max is None or t_min is None:
+                            continue
+                            
                         day = datetime.strptime(daily['time'][i], "%Y-%m-%d").strftime("%b %d")
                         emoji = get_weather_emoji(daily['weather_code'][i])
-                        high = round(daily['temperature_2m_max'][i])
-                        low = round(daily['temperature_2m_min'][i])
+                        high = round(t_max)
+                        low = round(t_min)
                         cards_html += f'<div style="min-width: 85px; text-align: center; border: 1px solid #444; border-radius: 10px; padding: 10px; background-color: rgba(255,255,255,0.05);"><div style="font-weight: bold; font-size: 14px; margin-bottom: 5px;">{day}</div><div style="font-size: 28px; margin-bottom: 5px;">{emoji}</div><div style="font-size: 12px; opacity: 0.8;">{high}° / {low}°</div></div>'
                     final_html = f'<div class="weather-scroll-container">{cards_html}</div>'
                     st.markdown(final_html, unsafe_allow_html=True)
